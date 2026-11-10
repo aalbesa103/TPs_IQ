@@ -1,0 +1,7 @@
+# Archivos temporales de sistema
+.DS_Store
+__MACOSX/
+._*
+Thumbs.db
+desktop.ini
+node_modules/

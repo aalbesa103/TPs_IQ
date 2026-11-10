@@ -1,0 +1,747 @@
+/* ==========================================================================
+   style.css
+   Estética RPG Retro 2D — Cátedra de Introducción a la Química (Exactas UNLP)
+   100% autocontenido, sin dependencias externas.
+   ========================================================================== */
+
+:root {
+  --bg-outer: #0b0e17;
+  --bg-frame: #161b29;
+  --bg-box: #1d2336;
+  --bg-panel: #131826;
+  --bg-btn: #262f47;
+  --bg-btn-hover: #354163;
+  --border-light: #f1faee;
+  --border-gold: #ffd166;
+  --accent-green: #06d6a0;
+  --accent-cyan: #7bdff2;
+  --accent-red: #ff5964;
+  --accent-orange: #ff9f1c;
+  --accent-purple: #b388eb;
+  --text-main: #f8f9fa;
+  --text-muted: #a0aec0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-outer);
+  background-image:
+    radial-gradient(rgba(255, 209, 102, 0.06) 1px, transparent 1px),
+    radial-gradient(rgba(123, 223, 242, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+  color: var(--text-main);
+  font-family: 'Courier New', Courier, monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 10px 12px;
+  user-select: none;
+}
+
+/* Contenedor Principal tipo Consola / Laboratorio Virtual */
+.game-shell {
+  width: 100%;
+  max-width: 880px;
+  background-color: var(--bg-frame);
+  border: 3px solid var(--border-light);
+  box-shadow:
+    0 0 0 4px #000000,
+    0 12px 36px rgba(0, 0, 0, 0.85);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+}
+
+/* Barra HUD Superior */
+.hud-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background-color: var(--bg-box);
+  border: 2px solid var(--border-gold);
+  padding: 8px 12px;
+}
+
+.hud-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 0.82rem;
+  align-items: center;
+}
+
+.hud-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hud-label {
+  color: var(--text-muted);
+}
+
+.hud-value {
+  color: var(--border-gold);
+  font-weight: bold;
+}
+
+.hud-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hud-btn {
+  background-color: var(--bg-btn);
+  color: var(--text-main);
+  border: 2px solid var(--accent-cyan);
+  padding: 4px 9px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.08s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.hud-btn:hover {
+  background-color: var(--bg-btn-hover);
+  border-color: var(--border-gold);
+}
+
+.hud-btn:active {
+  transform: translateY(1px);
+}
+
+.hud-btn.muted {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.hud-btn.mode-teacher {
+  background-color: #2b1d3d;
+  border-color: var(--accent-orange);
+  color: var(--border-gold);
+}
+
+.hud-btn.mode-student {
+  background-color: #16332f;
+  border-color: var(--accent-green);
+  color: #e6fffa;
+}
+
+/* Panel Desplegable de Modo Docente */
+.teacher-panel {
+  background-color: #1c162b;
+  border: 2px solid var(--accent-orange);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.teacher-panel.hidden {
+  display: none;
+}
+
+.teacher-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px dashed var(--accent-orange);
+  padding-bottom: 5px;
+  color: var(--border-gold);
+  font-weight: bold;
+}
+
+.teacher-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
+.teacher-card {
+  background-color: rgba(11, 14, 23, 0.55);
+  border: 1px solid #483863;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.teacher-card h4 {
+  color: var(--accent-cyan);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.teacher-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 0.77rem;
+}
+
+.teacher-row label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: var(--text-main);
+}
+
+.teacher-input,
+.teacher-select {
+  background-color: #0e121d;
+  color: var(--border-gold);
+  border: 1px solid #4a5568;
+  padding: 2px 5px;
+  font-family: inherit;
+  font-size: 0.77rem;
+  width: 78px;
+}
+
+.teacher-select {
+  width: auto;
+  max-width: 150px;
+}
+
+.teacher-btn-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.teacher-mini-btn {
+  background-color: #2d2342;
+  color: var(--text-main);
+  border: 1px solid var(--border-gold);
+  padding: 3px 7px;
+  font-family: inherit;
+  font-size: 0.73rem;
+  cursor: pointer;
+}
+
+.teacher-mini-btn:hover {
+  background-color: #423361;
+}
+
+/* Escenario Visual (Canvas 2D) */
+.viewport-frame {
+  width: 100%;
+  background-color: #0d111a;
+  border: 3px solid #4a5568;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+
+#scene-canvas {
+  width: 100%;
+  height: auto;
+  max-height: 330px;
+  display: block;
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+
+/* Barra de Controles Instrumentales Interactivos (Sliders / Inputs rápidos) */
+.instrument-bar {
+  background-color: #141b2d;
+  border: 2px solid var(--accent-cyan);
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.instrument-bar.hidden {
+  display: none;
+}
+
+.inst-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inst-slider {
+  accent-color: var(--border-gold);
+  cursor: pointer;
+  width: 150px;
+}
+
+.inst-number {
+  background-color: #0b0e17;
+  color: var(--accent-green);
+  border: 1px solid var(--accent-cyan);
+  padding: 3px 6px;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: bold;
+  width: 82px;
+}
+
+.inst-badge {
+  background-color: #1f2942;
+  border: 1px solid var(--border-gold);
+  color: var(--border-gold);
+  padding: 3px 8px;
+  font-weight: bold;
+  font-size: 0.78rem;
+}
+
+/* Caja de Diálogo Estilo RPG Retro */
+.dialog-box {
+  background-color: var(--bg-box);
+  border: 3px solid var(--border-light);
+  box-shadow: inset 0 0 0 3px #0e1320;
+  padding: 12px;
+  display: flex;
+  gap: 14px;
+  min-height: 112px;
+  align-items: flex-start;
+}
+
+.portrait-wrapper {
+  flex-shrink: 0;
+  border: 2px solid var(--border-gold);
+  background-color: #111622;
+  padding: 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#portrait-canvas {
+  width: 64px;
+  height: 64px;
+  image-rendering: pixelated;
+  display: block;
+}
+
+.dialog-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.speaker-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px dashed #3b4254;
+  padding-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.speaker-left {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+#speaker-name {
+  font-size: 0.98rem;
+  font-weight: bold;
+  color: var(--border-gold);
+}
+
+#speaker-role {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.skip-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+#dialog-text {
+  font-size: 0.92rem;
+  line-height: 1.45;
+  color: var(--text-main);
+  min-height: 3.6em;
+  user-select: text;
+}
+
+/* Panel de Opciones / Comandos del Jugador */
+.options-panel {
+  background-color: var(--bg-panel);
+  border: 2px solid #4a5568;
+  padding: 10px;
+}
+
+.options-title {
+  font-size: 0.75rem;
+  color: var(--accent-cyan);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+#options-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rpg-btn {
+  background-color: var(--bg-btn);
+  color: var(--text-main);
+  border: 2px solid var(--border-light);
+  box-shadow: 0 3px 0 #090c14;
+  padding: 8px 13px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: bold;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.1s ease, transform 0.08s ease, border-color 0.1s ease;
+}
+
+.rpg-btn:hover:not(:disabled) {
+  background-color: var(--bg-btn-hover);
+  border-color: var(--border-gold);
+}
+
+.rpg-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #090c14;
+}
+
+.rpg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.rpg-btn.rpg-btn-accent {
+  background-color: #1c3b35;
+  border-color: var(--accent-green);
+  color: #e6fffa;
+}
+
+.rpg-btn.rpg-btn-accent:hover:not(:disabled) {
+  background-color: #265249;
+  border-color: var(--border-gold);
+}
+
+.rpg-btn.rpg-btn-warn {
+  background-color: #3d261c;
+  border-color: var(--accent-orange);
+  color: #fff3e0;
+}
+
+.rpg-btn.rpg-btn-hub {
+  flex: 1 1 calc(50% - 8px);
+  min-width: 240px;
+  padding: 11px 14px;
+  border-color: var(--border-gold);
+}
+
+/* Modal de Bitácora / Cuaderno de Laboratorio */
+.logbook-overlay {
+  position: absolute;
+  inset: 10px;
+  background-color: rgba(11, 14, 23, 0.98);
+  border: 3px solid var(--border-gold);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 60;
+}
+
+.logbook-overlay.hidden {
+  display: none;
+}
+
+.logbook-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #3b4254;
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.logbook-header h2 {
+  font-size: 1rem;
+  color: var(--border-gold);
+}
+
+.logbook-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.logbook-meta {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  background: #182032;
+  padding: 8px 12px;
+  border: 1px solid #3b4254;
+  line-height: 1.5;
+}
+
+.table-scroll {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid #3b4254;
+}
+
+.lab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.79rem;
+  text-align: center;
+}
+
+.lab-table th {
+  position: sticky;
+  top: 0;
+  background-color: #232c44;
+  color: var(--border-gold);
+  padding: 7px 6px;
+  border-bottom: 2px solid var(--border-gold);
+}
+
+.lab-table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #262f45;
+  color: var(--text-main);
+}
+
+.lab-table tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.val-good {
+  color: var(--accent-green);
+  font-weight: bold;
+}
+
+.val-warn {
+  color: var(--accent-orange);
+  font-weight: bold;
+}
+
+.val-bad {
+  color: var(--accent-red);
+  font-weight: bold;
+}
+
+/* Pie de página */
+.game-footer {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .dialog-box {
+    flex-direction: column;
+    align-items: center;
+  }
+  .rpg-btn.rpg-btn-hub {
+    flex: 1 1 100%;
+  }
+}
+
+/* ==========================================================================
+   MESA DE CÁLCULOS DEL ESTUDIANTE Y CALCULADORA CIENTÍFICA DE BOLSILLO
+   ========================================================================== */
+
+.calc-workbench {
+  background-color: #12192b;
+  border: 2px solid var(--border-gold);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.calc-workbench.hidden {
+  display: none;
+}
+
+.calc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px dashed var(--border-gold);
+  padding-bottom: 5px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.calc-header-title {
+  color: var(--border-gold);
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.calc-data-strip {
+  background-color: #192238;
+  border: 1px solid #354469;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  color: var(--accent-cyan);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.calc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 8px;
+}
+
+.calc-item {
+  background-color: #182034;
+  border: 1px solid #3b486b;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.calc-item.solved {
+  border-color: var(--accent-green);
+  background-color: rgba(6, 214, 160, 0.08);
+}
+
+.calc-item.error {
+  border-color: var(--accent-red);
+}
+
+.calc-item-label {
+  font-size: 0.78rem;
+  color: var(--text-main);
+  font-weight: bold;
+  display: flex;
+  justify-content: space-between;
+}
+
+.calc-item-formula {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.calc-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.calc-num-input {
+  background-color: #0b0e17;
+  color: var(--border-gold);
+  border: 1px solid var(--accent-cyan);
+  padding: 4px 7px;
+  font-family: inherit;
+  font-size: 0.83rem;
+  font-weight: bold;
+  width: 105px;
+}
+
+.calc-num-input:disabled {
+  color: var(--accent-green);
+  border-color: var(--accent-green);
+  opacity: 0.9;
+}
+
+.calc-unit {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.calc-verify-btn {
+  background-color: #263859;
+  color: var(--text-main);
+  border: 1px solid var(--accent-cyan);
+  padding: 4px 8px;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.calc-verify-btn:hover:not(:disabled) {
+  background-color: #354d7a;
+  border-color: var(--border-gold);
+}
+
+.calc-feedback {
+  font-size: 0.73rem;
+  min-height: 1.1em;
+}
+
+.calc-feedback.ok {
+  color: var(--accent-green);
+}
+
+.calc-feedback.err {
+  color: var(--accent-orange);
+}
+
+/* Mini Calculadora Científica Integrada */
+.mini-calc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  background-color: #0e1320;
+  border: 1px solid #354163;
+  padding: 5px 8px;
+  font-size: 0.76rem;
+}
+
+.mini-calc-expr {
+  background-color: #161d2f;
+  color: var(--text-main);
+  border: 1px solid #4a5568;
+  padding: 3px 8px;
+  font-family: inherit;
+  font-size: 0.78rem;
+  flex: 1;
+  min-width: 160px;
+}
+
+.mini-calc-res {
+  color: var(--accent-green);
+  font-weight: bold;
+  min-width: 90px;
+}

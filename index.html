@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Introducción a la Química — Laboratorio Virtual RPG (UNLP)</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <!-- Barra de Estado Superior (HUD de Laboratorio) -->
+    <header class="hud-bar">
+      <div id="hud-stats" class="hud-stats"></div>
+
+      <div class="hud-controls">
+        <button id="btn-hub" class="hud-btn" title="Volver a la recepción y elegir otro Trabajo Práctico">
+          🏠 Recepción TPs
+        </button>
+        <button id="btn-mode" class="hud-btn mode-student" title="Alternar entre Modo Alumno y Modo Docente">
+          🎓 Modo Alumno
+        </button>
+        <button id="btn-logbook" class="hud-btn" title="Abrir cuaderno de datos y exportar informe">
+          📖 Bitácora
+        </button>
+        <button id="btn-mute" class="hud-btn" title="Activar/Desactivar sonido retro de 8 bits">
+          🔊 Audio ON
+        </button>
+      </div>
+    </header>
+
+    <!-- Panel Desplegable de Modo Docente (Oculto por defecto en Modo Alumno) -->
+    <section id="teacher-panel" class="teacher-panel hidden">
+      <div class="teacher-header">
+        <span>👨‍🏫 PANEL DE CONTROL DE CÁTEDRA — MODO DOCENTE (SIMULACIÓN DE ERRORES Y PARÁMETROS)</span>
+        <span class="skip-hint">Los cambios impactan en tiempo real sobre las mediciones y cálculos</span>
+      </div>
+      <div id="teacher-content" class="teacher-grid"></div>
+    </section>
+
+    <!-- Escenario Interactivo 2D (Canvas 760x300) -->
+    <section class="viewport-frame">
+      <canvas id="scene-canvas" width="760" height="300"></canvas>
+    </section>
+
+    <!-- Barra de Controles Instrumentales (Sliders de ajuste fino cuando corresponde) -->
+    <section id="instrument-bar" class="instrument-bar hidden"></section>
+
+    <!-- Mesa de Cálculos del Alumno (Ejercicios numéricos interactivos y calculadora) -->
+    <section id="calc-workbench" class="calc-workbench hidden"></section>
+
+    <!-- Caja de Diálogo Estilo RPG Retro -->
+    <section class="dialog-box">
+      <div class="portrait-wrapper">
+        <canvas id="portrait-canvas" width="64" height="64"></canvas>
+      </div>
+      <div class="dialog-content">
+        <div class="speaker-header">
+          <div class="speaker-left">
+            <span id="speaker-name">Jefe de Trabajos Prácticos (JTP)</span>
+            <span id="speaker-role">Cátedra de Introducción a la Química · UNLP</span>
+          </div>
+          <span class="skip-hint">Clic aquí para completar texto</span>
+        </div>
+        <p id="dialog-text"></p>
+      </div>
+    </section>
+
+    <!-- Menú de Acciones y Opciones del Estudiante -->
+    <section class="options-panel">
+      <div class="options-title">
+        <span>▸ Seleccioná tu acción en el laboratorio:</span>
+        <span>Controles: Botones, Sliders o Teclas ← / →</span>
+      </div>
+      <div id="options-container"></div>
+    </section>
+
+    <!-- Modal de Bitácora / Cuaderno de Laboratorio -->
+    <aside id="logbook-panel" class="logbook-overlay hidden">
+      <div class="logbook-header">
+        <h2 id="logbook-title">📒 BITÁCORA DE LABORATORIO — DATOS EXPERIMENTALES</h2>
+        <div class="logbook-actions">
+          <button id="btn-export-txt" class="hud-btn" title="Descargar informe completo en texto plano">
+            📄 Descargar Informe (.TXT)
+          </button>
+          <button id="btn-export-csv" class="hud-btn" title="Exportar tabla para planilla de cálculo">
+            📊 Exportar Tabla (.CSV)
+          </button>
+          <button id="btn-close-log" class="hud-btn">✕ Cerrar Bitácora</button>
+        </div>
+      </div>
+      <div id="logbook-summary" class="logbook-meta"></div>
+      <div class="table-scroll">
+        <table class="lab-table">
+          <thead id="logbook-thead"></thead>
+          <tbody id="logbook-tbody"></tbody>
+        </table>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="game-footer">
+    Universidad Nacional de La Plata · Facultad de Ciencias Exactas · Departamento de Química · Cátedra de Introducción a la Química
+  </footer>
+
+  <!-- Scripts autocontenidos (Cargados en orden sin requerir servidor web externo) -->
+  <script src="js/audio.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/exporter.js"></script>
+  <script src="js/tp1_gases.js"></script>
+  <script src="js/tp2_densidad.js"></script>
+  <script src="js/tp3_victor_meyer.js"></script>
+  <script src="js/tp4_calorimetria.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
