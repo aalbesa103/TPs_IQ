@@ -26,6 +26,7 @@ window.LabApp = (function () {
     dom = {
       hudStats: document.getElementById('hud-stats'),
       btnHub: document.getElementById('btn-hub'),
+      btnChallenges: document.getElementById('btn-challenges'),
       btnMode: document.getElementById('btn-mode'),
       btnLogbook: document.getElementById('btn-logbook'),
       btnMute: document.getElementById('btn-mute'),
@@ -205,6 +206,11 @@ window.LabApp = (function () {
           label: '4️⃣ TP 4: Calorimetría — Calor de Neutralización y Termómetro de Beckmann',
           styleClass: 'rpg-btn-hub',
           onClick: () => startTP4()
+        },
+        {
+          label: '📝 Entrenador de Ejercicios de Parcial y Cuestiones Experimentales (Compilado de 18 Parciales + Guía)',
+          styleClass: 'rpg-btn-accent',
+          onClick: () => openChallengesMenu()
         },
         {
           label: '📋 Repasar normas de seguridad y uso de la calculadora de laboratorio',
@@ -557,9 +563,22 @@ window.LabApp = (function () {
         wbBoyle
       );
     } else if (stageName === 'boyle_graphs') {
+      let pertMsg =
+        '«Analicemos los gráficos de la Guía y de los Segundos Parciales: P vs V es una hipérbola isotérmica; P vs 1/V es una recta que pasa por el origen con pendiente n·R·T; y P·V vs V es una recta horizontal constante. Probá los botones de abajo para ver cómo se modifican las curvas al variar la masa, la temperatura o el tipo de gas.»';
+      if (st.boylePerturbation === 'more_mass_or_T') {
+        pertMsg =
+          '«🔴 Caso de Parcial (Mayor masa m₂ > m₁ o Mayor T₂ > T₁): Al aumentar el número de moles n o la temperatura T, el producto n·R·T aumenta. Por eso la hipérbola P vs V se ALEJA del origen, la pendiente de la recta P vs 1/V AUMENTA y la recta horizontal P·V sube.»';
+      } else if (st.boylePerturbation === 'same_mass_co2') {
+        pertMsg =
+          '«🟠 Caso de Parcial (Igual masa pero de CO₂, PM = 44 > 28,8 g/mol): A igual masa en gramos, como el CO₂ tiene mayor masa molar que el aire/N₂, el número de moles n = m/PM es MENOR. La hipérbola P vs V se ACERCA al origen y la pendiente de P vs 1/V DISMINUYE.»';
+      } else if (st.boylePerturbation === 'same_moles_co2') {
+        pertMsg =
+          '«🟢 Caso de Parcial (Igual número de moles de CO₂ u otro gas ideal): Como la ecuación de estado P·V = n·R·T depende únicamente del número de moles n y no de la identidad química del gas, ¡ninguno de los gráficos se modifica!»';
+      }
+
       showDialog(
         'ayudante',
-        '«Analicemos los tres gráficos de la página 37 de la Guía: la curva P vs V es una hipérbola, pero a simple vista no podríamos asegurar si responde a P·V = cte o P·V² = cte (Problema 5). Al graficar P·V vs V obtenemos una recta horizontal constante, mientras que P·V² vs V varía linealmente con el volumen.»',
+        pertMsg,
         [
           {
             label: '📊 Gráfico 1: P vs. V (Isoterma hiperbólica)',
@@ -569,16 +588,44 @@ window.LabApp = (function () {
             }
           },
           {
-            label: '📏 Gráfico 2: P·V vs. V (Recta horizontal = constante)',
+            label: '📈 Gráfico 2 (Parcial): P vs. 1/V (Recta por el origen, pendiente = n·R·T)',
+            onClick: () => {
+              st.boyleGraphType = 'P_vs_invV';
+              runTP1Stage('boyle_graphs');
+            }
+          },
+          {
+            label: '📏 Gráfico 3: P·V vs. V (Recta horizontal = constante)',
             onClick: () => {
               st.boyleGraphType = 'PV_vs_V';
               runTP1Stage('boyle_graphs');
             }
           },
           {
-            label: '📐 Gráfico 3: P·V² vs. V (Pendiente no nula, descarta PV² = cte)',
+            label: '📐 Gráfico 4: P·V² vs. V (Pendiente no nula, descarta PV² = cte)',
             onClick: () => {
               st.boyleGraphType = 'PV2_vs_V';
+              runTP1Stage('boyle_graphs');
+            }
+          },
+          {
+            label: '🔴 ¿Qué pasa en el gráfico si aumentamos la masa (m₂ > m₁) o la temperatura (T₂ > T₁)?',
+            onClick: () => {
+              st.boylePerturbation = st.boylePerturbation === 'more_mass_or_T' ? 'none' : 'more_mass_or_T';
+              runTP1Stage('boyle_graphs');
+            }
+          },
+          {
+            label: '🟠 ¿Qué pasa si reemplazamos el gas por IGUAL MASA de CO₂ (PM = 44)?',
+            onClick: () => {
+              st.boylePerturbation = st.boylePerturbation === 'same_mass_co2' ? 'none' : 'same_mass_co2';
+              runTP1Stage('boyle_graphs');
+            }
+          },
+          {
+            label: '🟢 ¿Qué pasa si reemplazamos el gas por IGUAL NÚMERO DE MOLES de CO₂?',
+            onClick: () => {
+              st.boylePerturbation = st.boylePerturbation === 'same_moles_co2' ? 'none' : 'same_moles_co2';
               runTP1Stage('boyle_graphs');
             }
           },
@@ -735,10 +782,44 @@ window.LabApp = (function () {
         onAllSolved: () => runTP1Stage('gl_graph')
       };
 
+      let glGraphMsg =
+        '«A partir de la ordenada al origen (a) y la pendiente (b) de la recta P vs. t (°C), calculá a qué temperatura centígrada (t₀) se haría cero la presión del gas ideal. Además, podés probar abajo las preguntas clásicas de parcial sobre cómo varían la pendiente, la ordenada y el corte en P=0.»';
+      if (st.glPerturbation === 'larger_bulb') {
+        glGraphMsg =
+          '«🔵 Caso de Parcial (Mayor volumen de bulbo con igual masa): Como P(t) = (n·R/V)·(t + 273,15), al aumentar V DISMINUYEN tanto la pendiente (n·R/V) como la ordenada al origen a 0 °C, pero la intersección con el eje de temperatura (P = 0) sigue siendo exactamente -273,15 °C.»';
+      } else if (st.glPerturbation === 'more_mass') {
+        glGraphMsg =
+          '«🔴 Caso de Parcial (Mayor masa de gas a igual V): Al aumentar el número de moles n, AUMENTAN la pendiente y la ordenada al origen, pero la recta sigue cortando el eje horizontal en el Cero Absoluto (-273,15 °C).»';
+      } else if (st.glPerturbation === 'same_mass_co2') {
+        glGraphMsg =
+          '«🟠 Caso de Parcial (Igual masa pero de CO₂, PM = 44 > 28,8): Hay menos moles n dentro del bulbo, por lo que DISMINUYEN la pendiente y la ordenada al origen, cortando nuevamente en -273,15 °C.»';
+      }
+
       showDialog(
         'ayudante',
-        '«A partir de la ordenada al origen (a) y la pendiente (b) de la recta P vs. t (°C), calculá a qué temperatura centígrada (t₀) se haría cero la presión de este gas ideal. Así hallamos experimentalmente el cero absoluto de la escala Kelvin.»',
+        glGraphMsg,
         [
+          {
+            label: '🔵 ¿Qué pasa con la recta si usamos igual masa en un bulbo de MAYOR VOLUMEN?',
+            onClick: () => {
+              st.glPerturbation = st.glPerturbation === 'larger_bulb' ? 'none' : 'larger_bulb';
+              runTP1Stage('gl_graph');
+            }
+          },
+          {
+            label: '🔴 ¿Qué pasa con la recta si inyectamos MÁS MASA de aire en el mismo bulbo?',
+            onClick: () => {
+              st.glPerturbation = st.glPerturbation === 'more_mass' ? 'none' : 'more_mass';
+              runTP1Stage('gl_graph');
+            }
+          },
+          {
+            label: '🟠 ¿Qué pasa si reemplazamos el aire por IGUAL MASA de CO₂ (PM = 44)?',
+            onClick: () => {
+              st.glPerturbation = st.glPerturbation === 'same_mass_co2' ? 'none' : 'same_mass_co2';
+              runTP1Stage('gl_graph');
+            }
+          },
           {
             label: '🧪 Avanzar a la Experiencia 3: Ley de Difusión de Graham (NH₃ + HCl)',
             styleClass: 'rpg-btn-accent',
@@ -910,10 +991,11 @@ window.LabApp = (function () {
             }
           },
           {
-            label: st.vacuumDone ? '✓ Vacío alcanzado (< 0,1 mmHg)' : '🔌 2° Encender bomba rotatoria y evacuar aire',
+            label: st.vacuumDone ? '✓ Vacío alcanzado (< 0,1 mmHg)' : '🔌 2° Encender bomba rotatoria y evacuar aire (Vacío óptimo < 0,1 mmHg)',
             disabled: !st.valveAmpAOpen || st.vacuumDone,
             onClick: () => {
               st.pumpRunning = true;
+              st.errors.residualPressureCmHg = 0.0;
               window.AudioEngine.playPump();
               setTimeout(() => {
                 st.pumpRunning = false;
@@ -922,6 +1004,22 @@ window.LabApp = (function () {
                 window.TP2_Densidad.computeM0();
                 runTP2Stage('vacio');
               }, 400);
+            }
+          },
+          {
+            label: '⚠️ Simular error de parcial: Hacer vacío insuficiente (dejar P_res = 25 mmHg de aire en m₀)',
+            styleClass: 'rpg-btn-warn',
+            disabled: !st.valveAmpAOpen || (st.vacuumDone && st.errors.residualPressureCmHg > 0),
+            onClick: () => {
+              st.pumpRunning = true;
+              st.errors.residualPressureCmHg = 2.5; // 25 mmHg de aire residual
+              window.AudioEngine.playPump();
+              setTimeout(() => {
+                st.pumpRunning = false;
+                st.vacuumDone = true;
+                window.TP2_Densidad.computeM0();
+                runTP2Stage('vacio');
+              }, 350);
             }
           },
           {
@@ -985,6 +1083,37 @@ window.LabApp = (function () {
               window.AudioEngine.playValve();
               runTP2Stage('equilibrar_m1');
             }
+          },
+          {
+            label: st.errors.missingH2SO4Flask
+              ? '✓ Frasco 2 (H₂SO₄) y 3 (Sílica): OMITIDOS (Pasa vapor de H₂O → Error por DEFECTO)'
+              : '⚠️ Simular error: Omitir desecadores H₂SO₄/Sílica (entra vapor de H₂O, PM=18 < 44)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
+              st.errors.missingSilicaFlask = st.errors.missingH2SO4Flask;
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: st.errors.missingWaterFlask
+              ? '✓ Frasco 1 (H₂O): OMITIDO (Pasa HCl(g) → Error por DEFECTO)'
+              : '⚠️ Simular error: Omitir Frasco 1 de agua (pasa HCl gaseoso, PM=36,5 < 44)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: st.errors.so3ImpurityInKipp
+              ? '✓ Impureza SO₃ en Kipp: ACTIVA (PM=80 > 44 → Error por EXCESO)'
+              : '⚠️ Simular error (Parcial 2023): En el Kipp se genera SO₃(g) (PM=80 > 44) no retenido',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.so3ImpurityInKipp = !st.errors.so3ImpurityInKipp;
+              runTP2Stage('kipp_tren');
+            }
           }
         ],
         null
@@ -1045,9 +1174,10 @@ window.LabApp = (function () {
         `«Llenamos completamente la ampolla con agua destilada (previamente hervida para expulsar gases disueltos y enfriada a ${st.tempAguaC.toFixed(1)} °C) cuidando que no queden burbujas adheridas, y la pesamos en balanza granataria para obtener m₂.»`,
         [
           {
-            label: '💧 Llenar ampolla con agua destilada desgasificada y pesar m₂',
+            label: '💧 Llenar ampolla con agua destilada desgasificada sin burbujas y pesar m₂ (Óptimo)',
             styleClass: 'rpg-btn-accent',
             onClick: () => {
+              st.errors.airBubblesWaterMl = 0.0;
               st.waterFilled = true;
               st.m2Weighed = true;
               st.score += 10;
@@ -1055,6 +1185,39 @@ window.LabApp = (function () {
               window.TP2_Densidad.performFinalCalculations();
               window.AudioEngine.playBalanceBeep();
               runTP2Stage('calculos');
+            }
+          },
+          {
+            label: '⚠️ Simular error de parcial: Dejar burbujas de aire al llenar con agua (subestima V → δ por EXCESO)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.airBubblesWaterMl = 12.5;
+              st.waterFilled = true;
+              st.m2Weighed = true;
+              window.TP2_Densidad.computeM2();
+              window.TP2_Densidad.performFinalCalculations();
+              window.AudioEngine.playBalanceBeep();
+              showDialog(
+                'alerta',
+                `«⚠️ Mirá en el dibujo de la ampolla: quedaron 12,5 mL de burbujas de aire adheridas a las paredes internas. Por eso la masa con agua bajó a m₂ = ${st.measured.m2_g.toFixed(2)} g, lo que subestimará el volumen V de la ampolla y dará un error por EXCESO en la densidad.»`,
+                [
+                  {
+                    label: '📊 Pasar al pizarrón de cálculos para comprobar el error por exceso',
+                    styleClass: 'rpg-btn-accent',
+                    onClick: () => runTP2Stage('calculos')
+                  },
+                  {
+                    label: '🔄 Golpear suavemente para eliminar las burbujas y volver a pesar m₂',
+                    onClick: () => {
+                      st.errors.airBubblesWaterMl = 0.0;
+                      window.TP2_Densidad.computeM2();
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  }
+                ],
+                null
+              );
             }
           }
         ],
@@ -1156,6 +1319,85 @@ window.LabApp = (function () {
             styleClass: 'rpg-btn-accent',
             disabled: !allTp2Solved,
             onClick: () => runTP2Stage('quiz')
+          },
+          {
+            label: '⚠️ Probar en vivo los 6 Errores Experimentales de Parcial sobre el Pizarrón',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              Object.keys(st.calcSolved).forEach(k => (st.calcSolved[k] = true));
+              window.TP2_Densidad.performFinalCalculations();
+              showDialog(
+                'ayudante',
+                '«Activá o desactivá cualquiera de los errores clásicos de Segundo Parcial y mirá arriba en el pizarrón cómo varían m₀, m₁, m₂, el Volumen V y la Densidad δ(CNTP), indicando si produce error por EXCESO (+) o por DEFECTO (-):»',
+                [
+                  {
+                    label: `${st.errors.skipEqualize180 ? '✅' : '⬜'} 1) No equilibrar llave 180° tras desconectar del Kipp (+P_Kipp → EXCESO)`,
+                    onClick: () => {
+                      st.errors.skipEqualize180 = !st.errors.skipEqualize180;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.residualPressureCmHg > 0 ? '✅' : '⬜'} 2) Vacío insuficiente antes de pesar m₀ (queda aire residual → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.residualPressureCmHg = st.errors.residualPressureCmHg > 0 ? 0.0 : 2.5;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.airBubblesWaterMl > 0 ? '✅' : '⬜'} 3) Quedan burbujas de aire al llenar con agua en m₂ (-V ampolla → EXCESO)`,
+                    onClick: () => {
+                      st.errors.airBubblesWaterMl = st.errors.airBubblesWaterMl > 0 ? 0.0 : 12.5;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.missingH2SO4Flask ? '✅' : '⬜'} 4) Entra vapor de agua por el tren lavador (PM 18 < 44 → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
+                      st.errors.missingSilicaFlask = st.errors.missingH2SO4Flask;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.missingWaterFlask ? '✅' : '⬜'} 5) Omitir primer frasco lavador con agua (pasa HCl PM 36,5 < 44 → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.so3ImpurityInKipp ? '✅' : '⬜'} 6) En el Kipp se genera SO₃ no retenido (PM 80 > 44 → EXCESO)`,
+                    onClick: () => {
+                      st.errors.so3ImpurityInKipp = !st.errors.so3ImpurityInKipp;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: '✨ Restaurar experiencia ideal sin errores y volver a los cálculos',
+                    styleClass: 'rpg-btn-accent',
+                    onClick: () => {
+                      st.errors.skipEqualize180 = false;
+                      st.errors.residualPressureCmHg = 0.0;
+                      st.errors.airBubblesWaterMl = 0.0;
+                      st.errors.missingH2SO4Flask = false;
+                      st.errors.missingSilicaFlask = false;
+                      st.errors.missingWaterFlask = false;
+                      st.errors.so3ImpurityInKipp = false;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  }
+                ],
+                wbTp2
+              );
+            }
           },
           {
             label: '📖 Abrir Bitácora y Exportar Informe (.TXT / .CSV)',
@@ -1261,6 +1503,28 @@ window.LabApp = (function () {
             }
           },
           {
+            label: st.errors.oilBath147C
+              ? '🛢️ Baño calefactor actual: Aceite a 147 °C en régimen (¡Comprobarás que NO da error!)'
+              : '🛢️ Probar pregunta de parcial: Reemplazar agua (100 °C) por aceite (T_eb = 147 °C) en régimen',
+            onClick: () => {
+              st.errors.oilBath147C = !st.errors.oilBath147C;
+              st.bathBoiling = true;
+              window.AudioEngine.playFlame();
+              runTP3Stage('preparacion');
+            }
+          },
+          {
+            label: '⚠️ Simular error: Pasar a pesar sin insuflar aire seco (quedan vapores previos)',
+            styleClass: 'rpg-btn-warn',
+            disabled: !st.bathBoiling,
+            onClick: () => {
+              st.errors.skipPurge = true;
+              st.tubePurged = false;
+              st.bellPlaced = true;
+              runTP3Stage('pesada');
+            }
+          },
+          {
             label: '🔄 Cambiar sustancia volátil problema',
             onClick: () => {
               const keys = Object.keys(window.TP3_VictorMeyer.SUBSTANCES);
@@ -1338,14 +1602,16 @@ window.LabApp = (function () {
         wbPesada
       );
     } else if (stageName === 'vaporizacion') {
-      const triggerVaporizationAnim = slowStopper => {
-        st.errors.slowStopperLoss = slowStopper;
+      const triggerVaporizationAnim = mode => {
+        st.errors.slowStopperLoss = mode === 'slow_stopper';
+        st.errors.ampouleStuckTop = mode === 'stuck_top';
+        st.errors.notInThermalRegime = mode === 'not_regime';
         st.ampouleDropped = true;
-        st.stopperClosedFast = !slowStopper;
+        st.stopperClosedFast = mode !== 'slow_stopper';
         st.vaporizationDone = false;
         st.vaporizingAnim = true;
         st.animProgress = 0.0;
-        // Reiniciar cálculos de la etapa final por si cambió la masa
+        // Reiniciar cálculos de la etapa final por si cambió la masa o el modo
         st.calcSolved.ph_mmhg = false;
         st.calcSolved.p_seco_atm = false;
         st.calcSolved.n_mmol = false;
@@ -1355,12 +1621,20 @@ window.LabApp = (function () {
         window.TP3_VictorMeyer.computeCollectedVolume();
         window.TP3_VictorMeyer.performCalculations();
 
-        showDialog(
-          'ayudante',
-          '«Observá en el equipo y en la Lupa de la Campana cómo cae la ampollita hasta el fondo a 100 °C, se rompe sobre la lana de vidrio y el vapor desplaza un volumen igual de aire que burbujea haciendo descender el nivel de agua en la campana graduada...»',
-          [],
-          null
-        );
+        let animMsg =
+          '«Observá en el equipo y en la Lupa de la Campana cómo cae la ampollita hasta el fondo, se rompe sobre la lana de vidrio y el vapor desplaza un volumen igual de aire que burbujea haciendo descender el nivel de agua en la campana graduada...»';
+        if (mode === 'stuck_top') {
+          animMsg =
+            '«⚠️ Mirá el tubo de vaporización: la ampollita quedó TRABADA en la parte superior (zona más fría) y no llegó al bulbo. Solo una fracción del líquido logra evaporarse, por lo que está entrando mucho menos aire a la campana (V menor → dará PM por EXCESO)...»';
+        } else if (mode === 'not_regime') {
+          animMsg =
+            '«⚠️ Arrojaste la ampollita cuando el equipo AÚN NO ESTABA EN RÉGIMEN (temperatura en ascenso): además del vapor de la muestra, el aire caliente del bulbo sigue dilatándose y empuja volumen extra hacia la campana (V mayor → dará PM por DEFECTO)...»';
+        } else if (mode === 'slow_stopper') {
+          animMsg =
+            '«⚠️ Demoraste en tapar (o el tapón pierde): parte del vapor escapa por la boca superior y se recoge menos volumen V en la campana (dará PM por EXCESO)...»';
+        }
+
+        showDialog('ayudante', animMsg, [], null);
 
         let clinkPlayed = false;
         const animTimer = setInterval(() => {
@@ -1377,7 +1651,7 @@ window.LabApp = (function () {
             st.animProgress = 1.0;
             st.vaporizingAnim = false;
             st.vaporizationDone = true;
-            if (!slowStopper && !st.bellOverflowed) st.score += 15;
+            if (mode === 'normal' && !st.bellOverflowed) st.score += 15;
             runTP3Stage('lectura');
           }
         }, 55);
@@ -1385,22 +1659,34 @@ window.LabApp = (function () {
 
       showDialog(
         'jtp',
-        '«Ahora retiramos el tapón superior, dejamos caer la ampollita para que se rompa sobre la lana de vidrio en el fondo a 100 °C, y colocamos inmediatamente el tapón para observar cómo el aire desplazado burbujea y llena la campana colectora.»',
+        '«Ahora retiramos el tapón superior, dejamos caer la ampollita para que se rompa sobre la lana de vidrio en el fondo y colocamos de inmediato el tapón. También podés simular acá mismo las situaciones experimentales que se toman en los parciales:»',
         [
           {
-            label: '⚡ Arrojar ampollita y tapar de inmediato (Ver llenado de la campana)',
+            label: '⚡ 1) Arrojar ampollita y tapar de inmediato en régimen (Procedimiento óptimo)',
             styleClass: 'rpg-btn-accent',
             disabled: st.vaporizingAnim,
-            onClick: () => triggerVaporizationAnim(false)
+            onClick: () => triggerVaporizationAnim('normal')
           },
           {
-            label: '🐢 Demorar al colocar el tapón superior (Ver efecto de pérdida de vapor)',
+            label: '⚠️ 2) Simular Parcial: La ampollita queda trabada en la parte superior del tubo (PM por EXCESO)',
             styleClass: 'rpg-btn-warn',
             disabled: st.vaporizingAnim,
-            onClick: () => triggerVaporizationAnim(true)
+            onClick: () => triggerVaporizationAnim('stuck_top')
           },
           {
-            label: '⚖️ Volver a la balanza para cambiar la masa de muestra',
+            label: '⚠️ 3) Simular Parcial: El equipo NO estaba en régimen (T en ascenso → PM por DEFECTO)',
+            styleClass: 'rpg-btn-warn',
+            disabled: st.vaporizingAnim,
+            onClick: () => triggerVaporizationAnim('not_regime')
+          },
+          {
+            label: '🐢 4) Simular Parcial: Demorar al tapar / pérdidas por el tapón (PM por EXCESO)',
+            styleClass: 'rpg-btn-warn',
+            disabled: st.vaporizingAnim,
+            onClick: () => triggerVaporizationAnim('slow_stopper')
+          },
+          {
+            label: '⚖️ Volver a la balanza para cambiar la masa (o probar desborde > 50 mL)',
             disabled: st.vaporizingAnim,
             onClick: () => runTP3Stage('pesada')
           }
@@ -1541,6 +1827,101 @@ window.LabApp = (function () {
             styleClass: 'rpg-btn-accent',
             disabled: !allVmSolved,
             onClick: () => runTP3Stage('quiz')
+          },
+          {
+            label: '⚠️ Probar en vivo los 7 Errores Experimentales de Parcial en Víctor Meyer',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              Object.keys(st.calcSolved).forEach(k => (st.calcSolved[k] = true));
+              window.TP3_VictorMeyer.computeCollectedVolume();
+              window.TP3_VictorMeyer.performCalculations();
+              showDialog(
+                'ayudante',
+                '«Activá o desactivá cualquiera de las situaciones experimentales tomadas en los Segundos Parciales y observá en vivo en la Lupa de la Campana y en la Pizarra cómo varían V recogido, P_seco y el Peso Molecular calculado (por EXCESO, por DEFECTO o SIN ERROR):»',
+                [
+                  {
+                    label: `${st.errors.ampouleStuckTop ? '✅' : '⬜'} 1) Ampollita trabada arriba en zona fría del tubo (-V → PM por EXCESO)`,
+                    onClick: () => {
+                      st.errors.ampouleStuckTop = !st.errors.ampouleStuckTop;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.notInThermalRegime ? '✅' : '⬜'} 2) Equipo fuera de régimen (T en ascenso dilata aire: +V → PM por DEFECTO)`,
+                    onClick: () => {
+                      st.errors.notInThermalRegime = !st.errors.notInThermalRegime;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.oilBath147C ? '✅' : '⬜'} 3) Reemplazar agua (100°C) por baño de aceite (147°C) en régimen (¡SIN ERROR!)`,
+                    onClick: () => {
+                      st.errors.oilBath147C = !st.errors.oilBath147C;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.skipPurge ? '✅' : '⬜'} 4) Insuflado previo insuficiente (vapor previo condensa: -V → PM por EXCESO)`,
+                    onClick: () => {
+                      st.errors.skipPurge = !st.errors.skipPurge;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.slowStopperLoss ? '✅' : '⬜'} 5) Pérdidas por el tapón o demorar al tapar (-V → PM por EXCESO)`,
+                    onClick: () => {
+                      st.errors.slowStopperLoss = !st.errors.slowStopperLoss;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.ignorePvWater ? '✅' : '⬜'} 6) Olvidar restar P_v(H₂O) en el cálculo de P (+P → PM por DEFECTO)`,
+                    onClick: () => {
+                      st.errors.ignorePvWater = !st.errors.ignorePvWater;
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.bellOverflowed ? '✅' : '⬜'} 7) Pesar exceso de muestra (300 mg → desborda campana > 50 mL → PM por EXCESO)`,
+                    onClick: () => {
+                      st.sampleMassG = st.bellOverflowed ? sub.defaultMassG : 0.300;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: '✨ Restaurar corrida ideal sin errores y volver a los cálculos',
+                    styleClass: 'rpg-btn-accent',
+                    onClick: () => {
+                      st.errors.ampouleStuckTop = false;
+                      st.errors.notInThermalRegime = false;
+                      st.errors.oilBath147C = false;
+                      st.errors.skipPurge = false;
+                      st.errors.slowStopperLoss = false;
+                      st.errors.ignorePvWater = false;
+                      st.errors.ignoreWaterColumn = false;
+                      st.sampleMassG = sub.defaultMassG;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  }
+                ],
+                wbVM
+              );
+            }
           },
           {
             label: '⚖️ Volver a la balanza (Probar pesar de más o ajustar masa)',
@@ -2508,6 +2889,153 @@ window.LabApp = (function () {
   }
 
   // =========================================================================
+  // ENTRENADOR INTERACTIVO DE EJERCICIOS DE PARCIAL Y GUÍA (challenges.js)
+  // =========================================================================
+  const challengeSolvedMap = {};
+
+  function openChallengesMenu(tpFilter) {
+    if (!window.LabChallenges) return;
+    const currentTp = tpFilter || (app.activeTp !== 'hub' ? app.activeTp : null);
+
+    if (!currentTp) {
+      showDialog(
+        'jtp',
+        '«Bienvenido al Entrenador de Ejercicios de Parcial y Cuestiones Experimentales (compilado de los 18 Segundos Parciales de Introducción a la Química y de la Guía de TP). Elegí de qué Trabajo Práctico querés resolver ejercicios numéricos y de análisis de errores:»',
+        [
+          {
+            label: '1️⃣ Ejercicios de Parcial — TP 1: Leyes de Gases, Gráficos, Tubo de Boyle y Teoría Cinética (9 ejercicios)',
+            styleClass: 'rpg-btn-hub',
+            onClick: () => openChallengesMenu('tp1')
+          },
+          {
+            label: '2️⃣ Ejercicios de Parcial — TP 2: Densidad de Gases, Estequiometría del Kipp y Errores (7 ejercicios)',
+            styleClass: 'rpg-btn-hub',
+            onClick: () => openChallengesMenu('tp2')
+          },
+          {
+            label: '3️⃣ Ejercicios de Parcial — TP 3: Víctor Meyer, Fórmula Molecular y Análisis de Errores (7 ejercicios)',
+            styleClass: 'rpg-btn-hub',
+            onClick: () => openChallengesMenu('tp3')
+          },
+          {
+            label: '4️⃣ Ejercicios de Parcial — TP 4: Calorimetría, Equivalente E, Reactivo Limitante y Dilución (5 ejercicios)',
+            styleClass: 'rpg-btn-hub',
+            onClick: () => openChallengesMenu('tp4')
+          },
+          {
+            label: '↩ Volver a la Recepción de Trabajos Prácticos',
+            onClick: () => enterHub()
+          }
+        ],
+        null
+      );
+      return;
+    }
+
+    const list = window.LabChallenges.getChallengesForTp(currentTp);
+    const tpNames = {
+      tp1: 'TP 1: Leyes de los Gases, Gráficos y Teoría Cinética',
+      tp2: 'TP 2: Densidad de Gases, Kipp y Regnault',
+      tp3: 'TP 3: Pesos Moleculares por Víctor Meyer',
+      tp4: 'TP 4: Calorimetría y Calor de Neutralización'
+    };
+
+    const opts = list.map((item, idx) => ({
+      label: `📌 ${idx + 1}. ${item.title}`,
+      onClick: () => runChallengeItem(currentTp, idx)
+    }));
+
+    opts.push({
+      label: '📚 Elegir otra categoría de TP en el Entrenador de Parciales',
+      styleClass: 'rpg-btn-accent',
+      onClick: () => openChallengesMenu(null)
+    });
+
+    opts.push({
+      label: '↩ Volver al laboratorio en curso',
+      onClick: () => {
+        if (app.activeTp === 'tp1') runTP1Stage(window.TP1_Gases.getState().stage);
+        else if (app.activeTp === 'tp2') runTP2Stage(window.TP2_Densidad.getState().stage);
+        else if (app.activeTp === 'tp3') runTP3Stage(window.TP3_VictorMeyer.getState().stage);
+        else if (app.activeTp === 'tp4') runTP4Stage(window.TP4_Calorimetria.getState().stage);
+        else enterHub();
+      }
+    });
+
+    showDialog(
+      'jtp',
+      `«Seleccioná qué ejercicio de parcial o cuestión experimental de ${tpNames[currentTp] || currentTp} querés resolver en tu Mesa de Cálculos:»`,
+      opts,
+      null
+    );
+  }
+
+  function runChallengeItem(tpKey, idx) {
+    const list = window.LabChallenges.getChallengesForTp(tpKey);
+    const item = list[idx];
+    if (!item) return;
+
+    let wbCfg = null;
+    if (item.workbench) {
+      wbCfg = {
+        title: item.workbench.title,
+        showAutoSolve: true,
+        solvedMap: challengeSolvedMap,
+        dataStripHtml: item.workbench.dataStripHtml,
+        fields: item.workbench.fields,
+        onFieldSolved: () => {
+          window.AudioEngine.playRecordPoint();
+        },
+        onAllSolved: () => {
+          window.AudioEngine.playFanfare();
+        }
+      };
+    }
+
+    const opts = [];
+    if (Array.isArray(item.options)) {
+      item.options.forEach(opt => {
+        opts.push({
+          label: opt.label,
+          styleClass: opt.correct ? 'rpg-btn-accent' : '',
+          onClick: () => {
+            if (opt.correct) window.AudioEngine.playFanfare();
+            else window.AudioEngine.playError();
+            showDialog(
+              opt.correct ? 'jtp' : 'ayudante',
+              opt.feedback,
+              [
+                {
+                  label: opt.correct ? '📋 Volver al listado de ejercicios de este TP' : '🔄 Reintentar pregunta',
+                  styleClass: 'rpg-btn-accent',
+                  onClick: () => (opt.correct ? openChallengesMenu(tpKey) : runChallengeItem(tpKey, idx))
+                },
+                {
+                  label: '➡️ Siguiente ejercicio de la lista',
+                  onClick: () => runChallengeItem(tpKey, (idx + 1) % list.length)
+                }
+              ],
+              wbCfg
+            );
+          }
+        });
+      });
+    }
+
+    opts.push({
+      label: '➡️ Pasar al siguiente ejercicio de este TP',
+      styleClass: Array.isArray(item.options) ? '' : 'rpg-btn-accent',
+      onClick: () => runChallengeItem(tpKey, (idx + 1) % list.length)
+    });
+    opts.push({
+      label: '📋 Volver al listado de ejercicios de Parcial',
+      onClick: () => openChallengesMenu(tpKey)
+    });
+
+    showDialog('jtp', item.prompt, opts, wbCfg);
+  }
+
+  // =========================================================================
   // INTERACCIÓN DIRECTA EN EL CANVAS, TECLADO Y BUCLE DE ANIMACIÓN
   // =========================================================================
   function bindEvents() {
@@ -2515,6 +3043,13 @@ window.LabApp = (function () {
       window.AudioEngine.playSelect();
       enterHub();
     });
+
+    if (dom.btnChallenges) {
+      dom.btnChallenges.addEventListener('click', () => {
+        window.AudioEngine.playSelect();
+        openChallengesMenu();
+      });
+    }
 
     dom.btnMode.addEventListener('click', () => {
       app.teacherMode = !app.teacherMode;

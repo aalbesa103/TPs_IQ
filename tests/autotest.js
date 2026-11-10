@@ -95,6 +95,7 @@ require(path.join(root, 'js/tp1_gases.js'));
 require(path.join(root, 'js/tp2_densidad.js'));
 require(path.join(root, 'js/tp3_victor_meyer.js'));
 require(path.join(root, 'js/tp4_calorimetria.js'));
+require(path.join(root, 'js/challenges.js'));
 require(path.join(root, 'js/main.js'));
 
 if (onReady) onReady();
@@ -163,7 +164,24 @@ check('Densidad en CNTP sin errores sistemáticos', Math.abs(calc2.deltaCntpExpG
 st2.errors.skipEqualize180 = true;
 window.TP2_Densidad.computeM1();
 const calc2OverP = window.TP2_Densidad.performFinalCalculations();
-check('Simulación de error por omitir giro de 180° (sobrepresión Kipp)', calc2OverP.deltaCntpExpGL > calc2.deltaCntpExpGL, `δ_aparente sube a ${calc2OverP.deltaCntpExpGL.toFixed(4)} g/L`);
+check('Simulación de error por omitir giro de 180° (sobrepresión Kipp -> EXCESO)', calc2OverP.deltaCntpExpGL > calc2.deltaCntpExpGL, `δ_aparente sube a ${calc2OverP.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.skipEqualize180 = false;
+st2.errors.airBubblesWaterMl = 12.5;
+const calc2Bub = window.TP2_Densidad.performFinalCalculations();
+check('Simulación de error por burbujas en agua m₂ (-V -> EXCESO)', calc2Bub.deltaCntpExpGL > calc2.deltaCntpExpGL, `δ_aparente sube a ${calc2Bub.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.airBubblesWaterMl = 0.0;
+st2.errors.missingH2SO4Flask = true;
+st2.errors.missingSilicaFlask = true;
+const calc2Hum = window.TP2_Densidad.performFinalCalculations();
+check('Simulación de error por vapor de agua en tren (PM 18 < 44 -> DEFECTO)', calc2Hum.deltaCntpExpGL < calc2.deltaCntpExpGL, `δ_aparente baja a ${calc2Hum.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.missingH2SO4Flask = false;
+st2.errors.missingSilicaFlask = false;
+st2.errors.so3ImpurityInKipp = true;
+const calc2SO3 = window.TP2_Densidad.performFinalCalculations();
+check('Simulación de error por SO₃ en el Kipp (PM 80 > 44 -> EXCESO)', calc2SO3.deltaCntpExpGL > calc2.deltaCntpExpGL, `δ_aparente sube a ${calc2SO3.deltaCntpExpGL.toFixed(4)} g/L`);
 ['vacio', 'pesar_m0', 'kipp_tren', 'equilibrar_m1', 'agua_m2', 'calculos', 'quiz'].forEach(stage => {
   st2.stage = stage;
   window.TP2_Densidad.renderScene(fakeCanvas);
@@ -196,6 +214,24 @@ check(
   st3.bellOverflowed && st3.collectedVolMl === 50.0 && c3Over.mwExp > 140,
   `V_real = ${st3.unclampedVolMl.toFixed(1)} mL -> retiene 50.0 mL -> PM se infla a ${c3Over.mwExp.toFixed(1)} g/mol`
 );
+
+st3.sampleMassG = 0.158;
+st3.errors.ampouleStuckTop = true;
+window.TP3_VictorMeyer.computeCollectedVolume();
+const c3Stuck = window.TP3_VictorMeyer.performCalculations();
+check('Simulación de error: Ampollita trabada arriba en tubo (-V -> PM por EXCESO)', c3Stuck.mwExp > 150, `PM_exp = ${c3Stuck.mwExp.toFixed(1)} g/mol (> 119.38)`);
+
+st3.errors.ampouleStuckTop = false;
+st3.errors.notInThermalRegime = true;
+window.TP3_VictorMeyer.computeCollectedVolume();
+const c3NoReg = window.TP3_VictorMeyer.performCalculations();
+check('Simulación de error: Equipo fuera de régimen T en ascenso (+V -> PM por DEFECTO)', c3NoReg.mwExp < 105, `PM_exp = ${c3NoReg.mwExp.toFixed(1)} g/mol (< 119.38)`);
+
+st3.errors.notInThermalRegime = false;
+st3.errors.oilBath147C = true;
+window.TP3_VictorMeyer.computeCollectedVolume();
+const c3Oil = window.TP3_VictorMeyer.performCalculations();
+check('Simulación de Parcial: Baño de aceite a 147 °C en régimen (SIN ERROR)', Math.abs(c3Oil.mwExp - 119.38) < 0.5, `PM_exp = ${c3Oil.mwExp.toFixed(2)} g/mol (exacto)`);
 ['preparacion', 'pesada', 'vaporizacion', 'lectura', 'calculos', 'quiz'].forEach(stage => {
   st3.stage = stage;
   window.TP3_VictorMeyer.renderScene(fakeCanvas);
@@ -220,6 +256,14 @@ check('Menor calor liberado en Ácido Débil (CH₃COOH + NaOH)', Math.abs(c4Wea
   window.TP4_Calorimetria.renderScene(fakeCanvas);
 });
 check('Renderizado Canvas de las 6 escenas de TP 4', true);
+
+console.log('\n6. Banco de Ejercicios de Parcial y Cuestiones Experimentales (challenges.js):');
+const totalCh =
+  window.LabChallenges.getChallengesForTp('tp1').length +
+  window.LabChallenges.getChallengesForTp('tp2').length +
+  window.LabChallenges.getChallengesForTp('tp3').length +
+  window.LabChallenges.getChallengesForTp('tp4').length;
+check('Carga de banco de Parciales y Guía (TP1, TP2, TP3, TP4)', totalCh >= 26, `${totalCh} ejercicios interactivos verificados`);
 
 console.log(`\n================================================================`);
 console.log(` RESULTADO FINAL: ${passed} PRUEBAS SUPERADAS SIN ERRORES (100% OK)`);

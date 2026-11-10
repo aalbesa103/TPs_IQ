@@ -103,12 +103,15 @@ window.TP3_VictorMeyer = (function () {
       collectedVolMl: 0.0,
       bellOverflowed: false,
 
-      // Errores experimentales (configurables en Modo Docente o disparados por acciones)
+      // Errores experimentales de parcial (configurables en Modo Alumno y Modo Docente)
       errors: {
-        skipPurge: false,         // Queda vapor previo en el tubo que condensa en el agua
-        slowStopperLoss: false,   // Pérdida del 18% del vapor por demorar al tapar el tubo
-        ignorePvWater: false,     // Ignorar presión de vapor del agua en el cálculo
-        ignoreWaterColumn: false  // Ignorar la columna hidrostática h en el cálculo
+        skipPurge: false,          // Insuflado previo insuficiente: queda vapor previo que condensa en campana (-V -> PM por EXCESO)
+        slowStopperLoss: false,    // Tapón con pérdidas o demora al tapar: escapa 18% de vapor (-V -> PM por EXCESO)
+        ampouleStuckTop: false,    // Ampollita queda trabada en parte superior fría del tubo: vaporización incompleta (-V -> PM por EXCESO)
+        notInThermalRegime: false, // Equipo no estaba en régimen (T en ascenso): aire se dilata (+V -> PM por DEFECTO)
+        oilBath147C: false,        // Baño de aceite a 147 °C en régimen: vaporiza completo y desplaza igual n de aire (SIN ERROR)
+        ignorePvWater: false,      // No restar P_v(H2O) en el cálculo (+P -> PM por DEFECTO)
+        ignoreWaterColumn: false   // No restar columna hidrostática h/13.6 en el cálculo (+P -> PM por DEFECTO)
       },
 
       calculated: null,
@@ -136,6 +139,9 @@ window.TP3_VictorMeyer = (function () {
     if (state.errors.slowStopperLoss) {
       effectiveMassG *= 0.82; // Se pierde un 18% por la boca superior antes de tapar
     }
+    if (state.errors.ampouleStuckTop) {
+      effectiveMassG *= 0.64; // Queda trabada arriba en zona fría: no se vaporiza completamente (-36% de volumen)
+    }
 
     let molesDisplaced = effectiveMassG / sub.mw;
     if (state.errors.skipPurge) {
@@ -143,6 +149,13 @@ window.TP3_VictorMeyer = (function () {
       // que condensa al entrar al agua fría de la campana (Problemas 9 y 13-ii de la Guía)
       molesDisplaced *= 0.78;
     }
+    if (state.errors.notInThermalRegime) {
+      // Si el equipo aún no estaba en régimen (T en ascenso), la dilatación térmica del aire del bulbo
+      // empuja moles extra de aire hacia la campana (+24% de volumen recogido -> PM por defecto)
+      molesDisplaced *= 1.24;
+    }
+    // Nota pedagógica de parcial: si state.errors.oilBath147C === true (aceite a 147°C en régimen),
+    // como T_baño > T_eb y está en régimen, desplazará exactamente el mismo número de moles a la campana (SIN ERROR).
 
     // Primera estimación de columna hidrostática h en función del llenado de la campana de 50 mL
     const pApproxAtm = Math.max(100, state.patmMmHg - pvMmHg - 8.0) / 760.0;
@@ -261,15 +274,30 @@ window.TP3_VictorMeyer = (function () {
     const vx = 115;
     window.LabCommon.drawBunsen(ctx, vx, benchY, state.bathBoiling);
 
-    // Camisa calefactora externa (Baño de agua en ebullición a 100 °C)
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.22)';
+    // Camisa calefactora externa (Baño de agua a 100 °C o Baño de aceite a 147 °C)
+    ctx.fillStyle = state.errors.oilBath147C
+      ? 'rgba(245, 158, 11, 0.34)'
+      : 'rgba(56, 189, 248, 0.22)';
     ctx.beginPath();
     ctx.arc(vx, benchY - 56, 26, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillRect(vx - 17, 64, 34, benchY - 118);
-    ctx.strokeStyle = '#9aa5b1';
+    ctx.strokeStyle = state.errors.oilBath147C ? '#f59e0b' : '#9aa5b1';
     ctx.lineWidth = 2;
     ctx.strokeRect(vx - 17, 64, 34, benchY - 106);
+
+    if (state.errors.oilBath147C) {
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Aceite 147°C', vx - 46, 130);
+    }
+    if (state.errors.notInThermalRegime) {
+      ctx.fillStyle = '#ff9f1c';
+      ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ Sin régimen', vx - 48, 146);
+    }
 
     // Burbujas de vapor en la camisa calefactora si está en ebullición
     if (state.bathBoiling) {
@@ -304,16 +332,24 @@ window.TP3_VictorMeyer = (function () {
       ctx.fillStyle = state.stopperClosedFast && !state.errors.slowStopperLoss ? '#06d6a0' : '#ff5964';
       ctx.fillRect(vx - 10, 40, 20, 10);
 
-      // Posición vertical de la ampollita mientras cae por el tubo
-      const fallY = 58 + dropFraction * (benchY - 116);
-      ctx.fillStyle = '#ffd166';
+      // Posición vertical de la ampollita mientras cae por el tubo (si queda trabada arriba se detiene en zona fría)
+      const maxDropY = state.errors.ampouleStuckTop ? 36 : benchY - 116;
+      const fallY = 58 + dropFraction * maxDropY;
+      ctx.fillStyle = state.errors.ampouleStuckTop ? '#ff5964' : '#ffd166';
       ctx.beginPath();
-      ctx.arc(vx, fallY, 4, 0, Math.PI * 2);
+      ctx.arc(vx, fallY, 4.2, 0, Math.PI * 2);
       ctx.fill();
 
+      if (state.errors.ampouleStuckTop) {
+        ctx.fillStyle = '#ff5964';
+        ctx.font = 'bold 8.5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚠️ Trabada arriba', vx - 48, 96);
+      }
+
       // Si hubo pérdida por tapar lento, mostrar nubecita escapando arriba
-      if (state.errors.slowStopperLoss && fillFraction > 0 && fillFraction < 0.8) {
-        ctx.fillStyle = 'rgba(255, 89, 100, 0.6)';
+      if (state.errors.slowStopperLoss && fillFraction > 0 && fillFraction < 0.85) {
+        ctx.fillStyle = 'rgba(255, 89, 100, 0.85)';
         ctx.font = 'bold 9px monospace';
         ctx.textAlign = 'center';
         ctx.fillText('💨 Fuga vapor', vx, 34);

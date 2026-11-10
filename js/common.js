@@ -511,7 +511,31 @@ window.LabCommon = (function () {
       ctx.stroke();
     }
 
-    // Líneas auxiliares personalizadas (ej. extrapolación de áreas iguales en calorimetría)
+    // Curva secundaria de comparación (ej. qué pasa si cambia m, T, V o el gas en parciales)
+    if (typeof cfg.compareCurveFn === 'function') {
+      ctx.save();
+      ctx.strokeStyle = cfg.compareCurveColor || '#ff5964';
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      let started = false;
+      for (let s = 0; s <= 120; s++) {
+        const vx = minX + (s / 120) * (maxX - minX);
+        const vy = cfg.compareCurveFn(vx);
+        if (vy >= minY && vy <= maxY) {
+          const px = toPxX(vx);
+          const py = toPxY(vy);
+          if (!started) {
+            ctx.moveTo(px, py);
+            started = true;
+          } else {
+            ctx.lineTo(px, py);
+          }
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
     if (Array.isArray(cfg.extraLines)) {
       cfg.extraLines.forEach(line => {
         ctx.save();

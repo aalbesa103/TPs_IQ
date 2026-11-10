@@ -16,6 +16,7 @@ window.TP2_Densidad = (function () {
   const PM_CO2 = 44.01;
   const PM_H2O = 18.015;
   const PM_HCL = 36.46;
+  const PM_SO3 = 80.06;
   const PM_AIR = 28.97;
   const R_ATM = 0.082057;
   const DENS_IDEAL_CNTP = PM_CO2 / (R_ATM * 273.15); // 1.9635 g/L
@@ -57,14 +58,15 @@ window.TP2_Densidad = (function () {
 
       // Configuración de Errores Experimentales (modificables en Modo Docente o por decisiones del alumno)
       errors: {
-        residualPressureCmHg: 0.0,    // 0.0 = vacío óptimo (<0.1 mmHg); >0 deja aire residual en m0
-        skipEqualize180: false,       // Si no gira 180° la llave, queda sobrepresión hidrostática de HCl del Kipp
-        hclHeadCm: 28.0,              // Altura de columna de HCl en el Kipp (cm)
-        missingWaterFlask: false,     // Falta frasco 1 (H2O): pasa HCl(g) arrastrado (2.5% molar)
-        missingH2SO4Flask: false,     // Falta frasco 2 (H2SO4): pasa vapor de agua (85% HR)
-        missingSilicaFlask: false,    // Falta frasco 3 (Sílica): quedan trazas de humedad (18% HR)
+        residualPressureCmHg: 0.0,    // 0.0 = vacío óptimo (<0.1 mmHg); >0 deja aire residual en m0 (Error por DEFECTO)
+        skipEqualize180: false,       // Si no gira 180° la llave, queda sobrepresión hidrostática de HCl del Kipp (Error por EXCESO)
+        hclHeadCm: 45.0,              // Altura de columna de HCl en el Kipp (cm, d=1.07 g/mL)
+        missingWaterFlask: false,     // Falta frasco 1 (H2O): pasa HCl(g) arrastrado (PM 36.5 < 44 -> Error por DEFECTO)
+        missingH2SO4Flask: false,     // Falta frasco 2 (H2SO4): pasa vapor de agua (PM 18 < 44 -> Error por DEFECTO)
+        missingSilicaFlask: false,    // Falta frasco 3 (Sílica): quedan trazas de humedad (Error por DEFECTO)
+        so3ImpurityInKipp: false,     // Se genera SO3(g) (PM 80 > 44) no retenido en el tren (Parcial 2023 -> Error por EXCESO)
         unfilledWaterMl: 0.0,         // Volumen sin llenar en cuello al medir m2 (mL)
-        airBubblesWaterMl: 0.0        // Burbujas adheridas al llenar con agua en m2 (mL)
+        airBubblesWaterMl: 0.0        // Burbujas adheridas al llenar con agua en m2 (mL -> subestima V -> Error por EXCESO)
       },
 
       // Valores medidos en balanza y resultados calculados
@@ -136,19 +138,25 @@ window.TP2_Densidad = (function () {
 
     let pHClTorr = 0;
     if (state.errors.missingWaterFlask) {
-      pHClTorr = pTotalTorr * 0.035; // 3.5% de arrastre ácido de HCl gaseoso
+      pHClTorr = pTotalTorr * 0.06; // 6% de arrastre ácido de HCl gaseoso (PM = 36.46 < 44)
+    }
+
+    let pSO3Torr = 0;
+    if (state.errors.so3ImpurityInKipp) {
+      pSO3Torr = pTotalTorr * 0.06; // 6% de SO3 gaseoso no retenido (PM = 80.06 > 44)
     }
 
     // Aire residual que no fue barrido si el vacío fue malo (parte permanece)
     const pResTorr = Math.max(0, state.errors.residualPressureCmHg * 10.0) * 0.25;
-    const pCO2Torr = Math.max(0, pTotalTorr - pWaterTorr - pHClTorr - pResTorr);
+    const pCO2Torr = Math.max(0, pTotalTorr - pWaterTorr - pHClTorr - pSO3Torr - pResTorr);
 
     const mCO2 = idealGasMassG(volL, tempK, pCO2Torr / 760.0, PM_CO2);
     const mWater = idealGasMassG(volL, tempK, pWaterTorr / 760.0, PM_H2O);
     const mHCl = idealGasMassG(volL, tempK, pHClTorr / 760.0, PM_HCL);
+    const mSO3 = idealGasMassG(volL, tempK, pSO3Torr / 760.0, PM_SO3);
     const mAirRem = idealGasMassG(volL, tempK, pResTorr / 760.0, PM_AIR);
 
-    state.measured.masaImpurezas_g = mWater + mHCl + mAirRem;
+    state.measured.masaImpurezas_g = mWater + mHCl + mSO3 + mAirRem;
     state.measured.m1_g = state.realEmptyMassG + mCO2 + state.measured.masaImpurezas_g;
     return state.measured.m1_g;
   }
@@ -320,11 +328,22 @@ window.TP2_Densidad = (function () {
     // Esfera de vidrio de la ampolla de Regnault
     ctx.beginPath();
     ctx.arc(ampX, ampY, 34, 0, Math.PI * 2);
-    ctx.fillStyle = state.vacuumDone ? 'rgba(6, 214, 160, 0.10)' : 'rgba(255, 255, 255, 0.18)';
+    ctx.fillStyle = state.vacuumDone
+      ? state.errors.residualPressureCmHg > 0
+        ? 'rgba(255, 159, 28, 0.25)'
+        : 'rgba(6, 214, 160, 0.10)'
+      : 'rgba(255, 255, 255, 0.18)';
     ctx.fill();
-    ctx.strokeStyle = '#f1faee';
+    ctx.strokeStyle = state.errors.residualPressureCmHg > 0 ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
+
+    if (state.vacuumDone && state.errors.residualPressureCmHg > 0) {
+      ctx.fillStyle = '#ff9f1c';
+      ctx.font = 'bold 9.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⚠️ Aire residual', ampX, ampY + 3);
+    }
 
     // Dos llaves de vidrio esmerilado
     window.LabCommon.drawStopcock(ctx, ampX - 42, ampY, state.valveAmpAOpen || state.pumpRunning, 'Llave A');
@@ -574,9 +593,30 @@ window.TP2_Densidad = (function () {
     ctx.arc(ax, ay, 42, 0, Math.PI * 2);
     ctx.fillStyle = state.waterFilled ? 'rgba(56, 189, 248, 0.65)' : 'rgba(255, 255, 255, 0.10)';
     ctx.fill();
-    ctx.strokeStyle = '#f1faee';
+    ctx.strokeStyle = state.errors.airBubblesWaterMl > 0 ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
+
+    // Si hay burbujas de aire adheridas al llenar con agua, dibujarlas en las paredes de la ampolla
+    if (state.waterFilled && state.errors.airBubblesWaterMl > 0) {
+      const bubbleCoords = [
+        [-24, -18, 4.5], [22, -16, 4.0], [-28, 8, 3.8],
+        [26, 10, 4.2], [-10, -28, 3.5], [12, 24, 3.6], [0, -8, 3.2]
+      ];
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 1.2;
+      bubbleCoords.forEach(([dx, dy, r]) => {
+        ctx.beginPath();
+        ctx.arc(ax + dx, ay + dy, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.fillStyle = '#ff5964';
+      ctx.font = 'bold 9.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`⚠️ Burbujas de aire (${state.errors.airBubblesWaterMl.toFixed(1)} mL) → subestima V`, ax, ay - 46);
+    }
 
     window.LabCommon.drawStopcock(ctx, ax - 50, ay, false);
     window.LabCommon.drawStopcock(ctx, ax + 50, ay, false);
@@ -691,6 +731,36 @@ window.TP2_Densidad = (function () {
       399,
       212
     );
+
+    // Diagnóstico de errores experimentales de parcial (Abajo en la pizarra)
+    const activeErrs = [];
+    if (state.errors.skipEqualize180) activeErrs.push('No equilibró 180° (+P Kipp → EXCESO)');
+    if (state.errors.residualPressureCmHg > 0) activeErrs.push(`Vacío incompleto (${(state.errors.residualPressureCmHg * 10).toFixed(0)} torr → DEFECTO)`);
+    if (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask) activeErrs.push('Pasó vapor H₂O (PM 18 < 44 → DEFECTO)');
+    if (state.errors.missingWaterFlask) activeErrs.push('Sin frasco H₂O (Pasa HCl PM 36.5 → DEFECTO)');
+    if (state.errors.so3ImpurityInKipp) activeErrs.push('Impureza SO₃ en Kipp (PM 80 > 44 → EXCESO)');
+    if (state.errors.airBubblesWaterMl > 0) activeErrs.push(`Burbujas en agua m₂ (-V → EXCESO)`);
+
+    window.LabCommon.drawPixelBox(
+      ctx,
+      24,
+      250,
+      712,
+      36,
+      '#101827',
+      activeErrs.length > 0 ? '#ff5964' : '#06d6a0',
+      1.5
+    );
+    ctx.font = 'bold 10.5px monospace';
+    ctx.textAlign = 'left';
+    if (activeErrs.length === 0) {
+      ctx.fillStyle = '#06d6a0';
+      ctx.fillText('✓ CONDICIÓN EXPERIMENTAL: Sin errores sistemáticos activos (Usá los botones de abajo para simular errores de parcial)', 36, 272);
+    } else {
+      const biasType = calc.relErrorPercent > 0.3 ? 'ERROR POR EXCESO (+)' : calc.relErrorPercent < -0.3 ? 'ERROR POR DEFECTO (-)' : 'COMPENSADO';
+      ctx.fillStyle = '#ff5964';
+      ctx.fillText(`⚠️ ${biasType}: ${activeErrs.join(' | ')}`, 36, 272);
+    }
   }
 
   return {

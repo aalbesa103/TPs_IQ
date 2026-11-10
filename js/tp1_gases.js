@@ -31,7 +31,8 @@ window.TP1_Gases = (function () {
       // Gas encerrado tal que a Patm (758 mmHg), L0 = 18.0 cm -> V0 = 14.14 mL
       boyleBranchShiftCm: 0.0, // desplazamiento de la rama móvil (-16 a +24 cm)
       boyleRows: [],
-      boyleGraphType: 'P_vs_V', // 'P_vs_V' | 'PV_vs_V' | 'PV2_vs_V'
+      boyleGraphType: 'P_vs_V', // 'P_vs_V' | 'P_vs_invV' | 'PV_vs_V' | 'PV2_vs_V'
+      boylePerturbation: 'none', // 'none' | 'more_mass_or_T' | 'same_mass_co2' | 'same_moles_co2'
 
       // Experiencia 2: Gay-Lussac (Volumen constante)
       glBathTempC: 22.0,
@@ -39,6 +40,7 @@ window.TP1_Gases = (function () {
       glManometerAdjustMm: 0.0, // Ajuste de la rama libre para enrasar el aforo
       glEnrasado: true,
       glRows: [],
+      glPerturbation: 'none', // 'none' | 'larger_bulb' | 'more_mass' | 'same_mass_co2'
 
       // Experiencia 3: Difusión de Graham
       grahamRunning: false,
@@ -443,41 +445,84 @@ window.TP1_Gases = (function () {
   }
 
   function renderBoyleGraphs(ctx, w, h) {
-    window.LabCommon.drawLabBackground(ctx, w, h, 'ANÁLISIS GRÁFICO — LEY DE BOYLE-MARIOTTE', 22);
+    window.LabCommon.drawLabBackground(ctx, w, h, 'ANÁLISIS GRÁFICO — LEY DE BOYLE-MARIOTTE Y VARIACIONES DE PARCIAL', 22);
     const rows = state.boyleRows.length > 0 ? state.boyleRows : generateIdealBoyleSample();
 
     let points = [];
     let title = '';
     let xLabel = 'Volumen V (mL)';
     let yLabel = '';
+    let minX = Math.min(...rows.map(r => r.V_mL)) * 0.9;
+    let maxX = Math.max(...rows.map(r => r.V_mL)) * 1.08;
     let minY = 0, maxY = 2;
     let curveFn = null;
+    let compareCurveFn = null;
+    let compareColor = '#ff5964';
+    let decimalsX = 1;
 
-    const minV = Math.min(...rows.map(r => r.V_mL)) * 0.9;
-    const maxV = Math.max(...rows.map(r => r.V_mL)) * 1.08;
     const avgPV = rows.reduce((acc, r) => acc + r.PV, 0) / rows.length;
+
+    // Factor multiplicador sobre n·R·T según la perturbación de parcial elegida
+    let factorNRT = 1.0;
+    let pertLabel = 'Sin cambio (Curva base)';
+    if (state.boylePerturbation === 'more_mass_or_T') {
+      factorNRT = 1.25; // Mayor masa m2 > m1 o Mayor T2 > T1
+      pertLabel = '--- Roja: Mayor m o T (+nRT)';
+      compareColor = '#ff5964';
+    } else if (state.boylePerturbation === 'same_mass_co2') {
+      factorNRT = 28.8 / 44.0; // Igual masa pero de CO2 (PM 44 > 28.8 -> menos moles n)
+      pertLabel = '--- Naranja: Igual m de CO₂ (-n)';
+      compareColor = '#ff9f1c';
+    } else if (state.boylePerturbation === 'same_moles_co2') {
+      factorNRT = 1.0; // Igual número de moles de CO2 -> ¡No cambia!
+      pertLabel = '--- Verde: Igual moles CO₂ (No cambia)';
+      compareColor = '#06d6a0';
+    }
 
     if (state.boyleGraphType === 'P_vs_V') {
       title = 'GRÁFICO 1: Presión P (atm) vs. Volumen V (mL)';
       yLabel = 'P (atm)';
       points = rows.map(r => ({ x: r.V_mL, y: r.pGas_atm, color: '#06d6a0' }));
-      minY = 0.5;
-      maxY = 1.6;
+      minY = 0.45;
+      maxY = 1.75;
       curveFn = v => avgPV / Math.max(1, v);
+      if (state.boylePerturbation !== 'none') {
+        compareCurveFn = v => (avgPV * factorNRT) / Math.max(1, v);
+      }
+    } else if (state.boyleGraphType === 'P_vs_invV') {
+      title = 'GRÁFICO 2 (Parcial): P (atm) vs. 1/V (1/mL) — Recta pendiente n·R·T';
+      xLabel = '1 / V (mL⁻¹)';
+      yLabel = 'P (atm)';
+      points = rows.map(r => ({ x: 1.0 / r.V_mL, y: r.pGas_atm, color: '#06d6a0' }));
+      minX = 0.0;
+      maxX = Math.max(...rows.map(r => 1.0 / r.V_mL)) * 1.12;
+      minY = 0.0;
+      maxY = 1.75;
+      decimalsX = 3;
+      curveFn = invV => avgPV * invV;
+      if (state.boylePerturbation !== 'none') {
+        compareCurveFn = invV => avgPV * factorNRT * invV;
+      }
     } else if (state.boyleGraphType === 'PV_vs_V') {
-      title = 'GRÁFICO 2: Producto P·V (atm·mL) vs. V (mL)';
+      title = 'GRÁFICO 3: Producto P·V (atm·mL) vs. V (mL)';
       yLabel = 'P·V (atm·mL)';
       points = rows.map(r => ({ x: r.V_mL, y: r.PV, color: '#7bdff2' }));
-      minY = avgPV * 0.8;
-      maxY = avgPV * 1.2;
+      minY = avgPV * 0.6;
+      maxY = avgPV * 1.35;
       curveFn = () => avgPV;
+      if (state.boylePerturbation !== 'none') {
+        compareCurveFn = () => avgPV * factorNRT;
+      }
     } else {
-      title = 'GRÁFICO 3: Producto P·V² (atm·mL²) vs. V (mL)';
+      title = 'GRÁFICO 4: Producto P·V² (atm·mL²) vs. V (mL)';
       yLabel = 'P·V²';
       points = rows.map(r => ({ x: r.V_mL, y: r.PV2, color: '#ff9f1c' }));
-      minY = avgPV * minV * 0.85;
-      maxY = avgPV * maxV * 1.1;
+      minY = avgPV * minX * 0.75;
+      maxY = avgPV * maxX * 1.25;
       curveFn = v => avgPV * v;
+      if (state.boylePerturbation !== 'none') {
+        compareCurveFn = v => avgPV * factorNRT * v;
+      }
     }
 
     window.LabCommon.drawScientificPlot(ctx, {
@@ -485,8 +530,8 @@ window.TP1_Gases = (function () {
       y: 56,
       width: 430,
       height: 185,
-      minX: minV,
-      maxX: maxV,
+      minX: minX,
+      maxX: maxX,
       minY: minY,
       maxY: maxY,
       title: title,
@@ -494,19 +539,21 @@ window.TP1_Gases = (function () {
       yLabel: yLabel,
       points: points,
       curveFn: curveFn,
-      decimalsX: 1,
+      compareCurveFn: compareCurveFn,
+      compareCurveColor: compareColor,
+      decimalsX: decimalsX,
       decimalsY: 2,
       summaryLines: [
-        { text: 'CONCLUSIÓN EXPERIMENTAL:', bold: true, color: '#ffd166', gap: 20 },
-        { text: `T trabajo: ${state.tempAmbC.toFixed(1)} °C`, color: '#f8f9fa' },
-        { text: `P_atm:     ${state.patmMmHg.toFixed(1)} mmHg`, color: '#f8f9fa' },
-        { text: `Prom. P·V: ${avgPV.toFixed(2)} atm·mL`, bold: true, color: '#06d6a0', gap: 22 },
+        { text: 'CONCLUSIÓN Y PARCIALES:', bold: true, color: '#ffd166', gap: 18 },
+        { text: `Prom. P·V: ${avgPV.toFixed(2)} atm·mL`, bold: true, color: '#06d6a0', gap: 18 },
+        { text: pertLabel, bold: true, color: compareColor, gap: 18 },
         { text: '• P vs V: Hipérbola', color: '#cbd5e0' },
-        { text: '  isotérmica.', color: '#cbd5e0' },
-        { text: '• P·V vs V: Recta horiz.', color: '#7bdff2' },
-        { text: '  confirma PV = cte.', color: '#7bdff2' },
-        { text: '• P·V² vs V: Varía lin.', color: '#ff9f1c' },
-        { text: '  con V (no es cte).', color: '#ff9f1c' }
+        { text: '  (se aleja si ↑n o ↑T).', color: '#cbd5e0' },
+        { text: '• P vs 1/V: Recta por', color: '#7bdff2' },
+        { text: '  origen (pend. = nRT).', color: '#7bdff2' },
+        { text: '• Igual m CO₂ → menos', color: '#ff9f1c' },
+        { text: '  moles n (PM 44 > 28).', color: '#ff9f1c' },
+        { text: '• Igual n → NO cambia.', color: '#06d6a0' }
       ]
     });
   }
@@ -636,11 +683,31 @@ window.TP1_Gases = (function () {
   }
 
   function renderGayLussacGraph(ctx, w, h) {
-    window.LabCommon.drawLabBackground(ctx, w, h, 'EXTRAPOLACIÓN AL CERO ABSOLUTO — GAY-LUSSAC', 22);
+    window.LabCommon.drawLabBackground(ctx, w, h, 'EXTRAPOLACIÓN AL CERO ABSOLUTO — GAY-LUSSAC Y PARCIALES', 22);
     const rows = state.glRows.length >= 2 ? state.glRows : generateIdealGayLussacSample();
     const pts = rows.map(r => ({ x: r.t_C, y: r.P_atm, color: '#06d6a0' }));
     const reg = window.LabCommon.linearRegression(pts);
     const tZeroAbs = Math.abs(reg.slope) > 1e-9 ? -reg.intercept / reg.slope : -273.15;
+
+    let compareFn = null;
+    let compareColor = '#ff5964';
+    let pertNote = 'Recta experimental base';
+    if (state.glPerturbation === 'larger_bulb') {
+      // Mayor volumen V (Inciso 21-i del PDF): menor pendiente nR/V y menor ordenada, igual corte en -273.15°C
+      compareFn = t => 0.72 * (reg.slope * t + reg.intercept);
+      compareColor = '#7bdff2';
+      pertNote = '--- Celeste: Mayor V bulbo (↓pend)';
+    } else if (state.glPerturbation === 'more_mass') {
+      // Mayor masa de aire (Inciso 21-ii del PDF): mayor pendiente y mayor ordenada, igual corte en -273.15°C
+      compareFn = t => 1.32 * (reg.slope * t + reg.intercept);
+      compareColor = '#ff5964';
+      pertNote = '--- Roja: Más masa gas (↑pend)';
+    } else if (state.glPerturbation === 'same_mass_co2') {
+      // Igual masa pero de CO2 (PM 44 > 28.8 -> menos moles n): menor pendiente y ordenada, igual corte en -273.15°C
+      compareFn = t => (28.8 / 44.0) * (reg.slope * t + reg.intercept);
+      compareColor = '#ff9f1c';
+      pertNote = '--- Naranja: Igual m CO₂ (↓n)';
+    }
 
     window.LabCommon.drawScientificPlot(ctx, {
       x: 58,
@@ -650,27 +717,29 @@ window.TP1_Gases = (function () {
       minX: -300,
       maxX: 100,
       minY: 0,
-      maxY: 1.4,
+      maxY: 1.55,
       title: 'Presión P (atm) vs. Temperatura t (°C) — Extrapolación a P = 0',
       xLabel: 'Temperatura t (°C)',
       yLabel: 'P (atm)',
       points: pts,
       curveFn: t => reg.slope * t + reg.intercept,
+      compareCurveFn: compareFn,
+      compareCurveColor: compareColor,
       decimalsX: 0,
       decimalsY: 2,
       summaryLines: [
-        { text: 'LEY DE GAY-LUSSAC:', bold: true, color: '#ffd166', gap: 20 },
-        { text: `P(t) = a + b·t`, color: '#7bdff2' },
+        { text: 'LEY DE GAY-LUSSAC:', bold: true, color: '#ffd166', gap: 18 },
+        { text: `P(t) = P₀(1 + α·t)`, color: '#7bdff2' },
         { text: `Ordenada a: ${reg.intercept.toFixed(4)} atm`, color: '#f8f9fa' },
-        { text: `Pendiente:  ${reg.slope.toFixed(5)} atm/°C`, color: '#f8f9fa' },
-        { text: `R² ajuste:  ${reg.r2.toFixed(5)}`, color: '#f8f9fa', gap: 22 },
+        { text: `Pendiente:  ${reg.slope.toFixed(5)} atm/°C`, color: '#f8f9fa', gap: 18 },
+        { text: pertNote, bold: true, color: compareColor, gap: 18 },
         { text: 'CERO ABSOLUTO (P → 0):', bold: true, color: '#06d6a0' },
         {
           text: state.calcSolved.gl_tzero ? `t₀ exp = ${tZeroAbs.toFixed(1)} °C` : 't₀ = [ ? Calcular abajo ]',
           bold: true,
           color: state.calcSolved.gl_tzero ? '#06d6a0' : '#ff9f1c'
         },
-        { text: `Despejá t₀ = -a / b`, color: '#cbd5e0' }
+        { text: 'Todas cortan en -273.15°C', color: '#cbd5e0' }
       ]
     });
   }
