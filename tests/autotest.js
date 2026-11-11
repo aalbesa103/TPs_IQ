@@ -179,6 +179,18 @@ check('Simulación de error por vapor de agua en tren (PM 18 < 44 -> DEFECTO)', 
 
 st2.errors.missingH2SO4Flask = false;
 st2.errors.missingSilicaFlask = false;
+st2.errors.missingWaterFlask = true;
+const calc2HCl = window.TP2_Densidad.performFinalCalculations();
+check('Eliminación de Frasco 1 (H₂O): pasa HCl(g) (PM 36.5 < 44 -> DEFECTO)', calc2HCl.deltaCntpExpGL < calc2.deltaCntpExpGL, `δ_aparente baja a ${calc2HCl.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.missingH2SO4Flask = true;
+st2.errors.missingSilicaFlask = true;
+const calc2AllRemoved = window.TP2_Densidad.performFinalCalculations();
+check('Eliminación de los 3 Frascos Lavadores (HCl + H₂O -> mayor error por DEFECTO)', calc2AllRemoved.deltaCntpExpGL < calc2HCl.deltaCntpExpGL && calc2AllRemoved.deltaCntpExpGL < calc2Hum.deltaCntpExpGL, `δ_aparente baja a ${calc2AllRemoved.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.missingWaterFlask = false;
+st2.errors.missingH2SO4Flask = false;
+st2.errors.missingSilicaFlask = false;
 st2.errors.so3ImpurityInKipp = true;
 const calc2SO3 = window.TP2_Densidad.performFinalCalculations();
 check('Simulación de error por SO₃ en el Kipp (PM 80 > 44 -> EXCESO)', calc2SO3.deltaCntpExpGL > calc2.deltaCntpExpGL, `δ_aparente sube a ${calc2SO3.deltaCntpExpGL.toFixed(4)} g/L`);

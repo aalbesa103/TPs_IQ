@@ -1053,9 +1053,23 @@ window.LabApp = (function () {
         null
       );
     } else if (stageName === 'kipp_tren') {
+      const removedList = [];
+      if (st.errors.missingWaterFlask) removedList.push('Frasco 1 (H₂O: pasa HCl gaseoso, PM=36,5 < 44)');
+      if (st.errors.missingH2SO4Flask && st.errors.missingSilicaFlask) {
+        removedList.push('Frascos 2 y 3 (H₂SO₄ y Sílica: entra vapor de H₂O, PM=18 < 44)');
+      } else if (st.errors.missingH2SO4Flask) {
+        removedList.push('Frasco 2 (H₂SO₄: la Sílica Gel se satura rápido y vira al rosa)');
+      } else if (st.errors.missingSilicaFlask) {
+        removedList.push('Frasco 3 (Sílica Gel: sin indicador visual ni retención final de humedad)');
+      }
+
+      const flaskStatusText = removedList.length === 0
+        ? 'Actualmente los 3 frascos lavadores están CONECTADOS (Podés hacer clic directo sobre cada frasco en la mesada o usar los botones para eliminarlos y ver el impacto en m₁ y δ).'
+        : `⚠️ Frascos eliminados del tren: ${removedList.join(' + ')}. Mirá el bypass en el aparato y cómo cambia la masa m₁ de la ampolla (${window.TP2_Densidad.computeM1().toFixed(4)} g vs. 270,8422 g puros).`;
+
       showDialog(
         'jtp',
-        '«Sigamos el protocolo de llenado de la página 41 de la Guía: 1) Purgá el Aparato de Kipp para desplazar el aire del tren; 2) Abrí las llaves de entrada y salida para que circule CO₂ durante 10-15 minutos; 3) Cerrá las llaves en el orden estricto: primero la salida a la atmósfera, luego la entrada de la ampolla y por último el Kipp.»',
+        `«Sigamos el protocolo de llenado (pág. 41): 1) Purgá el Aparato de Kipp para desplazar el aire del tren; 2) Abrí las llaves para que circule CO₂ durante 10-15 min; 3) Cerrá en orden estricto: 1° Salida a la atmósfera → 2° Entrada de la ampolla → 3° Kipp. ${flaskStatusText}»`,
         [
           {
             label: st.kippPurged ? '✓ 1° Tren purgado y CO₂ circulando' : '💨 1° Abrir Kipp, purgar aire del tren y hacer circular CO₂ por la ampolla',
@@ -1085,23 +1099,49 @@ window.LabApp = (function () {
             }
           },
           {
-            label: st.errors.missingH2SO4Flask
-              ? '✓ Frasco 2 (H₂SO₄) y 3 (Sílica): OMITIDOS (Pasa vapor de H₂O → Error por DEFECTO)'
-              : '⚠️ Simular error: Omitir desecadores H₂SO₄/Sílica (entra vapor de H₂O, PM=18 < 44)',
+            label: st.errors.missingWaterFlask
+              ? '🔄 Volver a colocar Frasco 1: H₂O(l) (Actualmente ELIMINADO → pasa HCl PM=36,5)'
+              : '🗑️ Eliminar Frasco 1: H₂O(l) (No retiene vapores de HCl, PM=36,5 < 44 → δ por DEFECTO)',
             styleClass: 'rpg-btn-warn',
             onClick: () => {
-              st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
-              st.errors.missingSilicaFlask = st.errors.missingH2SO4Flask;
+              st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+              window.AudioEngine.playValve();
               runTP2Stage('kipp_tren');
             }
           },
           {
-            label: st.errors.missingWaterFlask
-              ? '✓ Frasco 1 (H₂O): OMITIDO (Pasa HCl(g) → Error por DEFECTO)'
-              : '⚠️ Simular error: Omitir Frasco 1 de agua (pasa HCl gaseoso, PM=36,5 < 44)',
+            label: st.errors.missingH2SO4Flask
+              ? '🔄 Volver a colocar Frasco 2: H₂SO₄(c) (Actualmente ELIMINADO)'
+              : '🗑️ Eliminar Frasco 2: H₂SO₄(c) (Sin desecante principal; satura la sílica gel)',
             styleClass: 'rpg-btn-warn',
             onClick: () => {
-              st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+              st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
+              window.AudioEngine.playValve();
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: st.errors.missingSilicaFlask
+              ? '🔄 Volver a colocar Frasco 3: Sílica Gel (Actualmente ELIMINADO)'
+              : '🗑️ Eliminar Frasco 3: Sílica Gel (Quita desecador final con indicador de CoCl₂)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.missingSilicaFlask = !st.errors.missingSilicaFlask;
+              window.AudioEngine.playValve();
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: (st.errors.missingWaterFlask && st.errors.missingH2SO4Flask && st.errors.missingSilicaFlask)
+              ? '✓ Restaurar los 3 Frascos Lavadores al tren de purificación'
+              : '🚨 Eliminar los 3 Frascos Lavadores a la vez (Kipp directo a la ampolla: entra HCl + H₂O)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              const allRemoved = st.errors.missingWaterFlask && st.errors.missingH2SO4Flask && st.errors.missingSilicaFlask;
+              st.errors.missingWaterFlask = !allRemoved;
+              st.errors.missingH2SO4Flask = !allRemoved;
+              st.errors.missingSilicaFlask = !allRemoved;
+              window.AudioEngine.playValve();
               runTP2Stage('kipp_tren');
             }
           },
@@ -2369,6 +2409,63 @@ window.LabApp = (function () {
         });
         return;
       }
+    } else if (app.activeTp === 'tp2') {
+      const st = window.TP2_Densidad.getState();
+      if (st.stage === 'kipp_tren' || st.stage === 'equilibrar_m1' || st.stage === 'agua_m2' || st.stage === 'calculos') {
+        dom.instrumentBar.classList.remove('hidden');
+        const m1 = window.TP2_Densidad.computeM1();
+        const calc = window.TP2_Densidad.performFinalCalculations();
+        const f1Rem = st.errors.missingWaterFlask;
+        const f2Rem = st.errors.missingH2SO4Flask;
+        const f3Rem = st.errors.missingSilicaFlask;
+        const allRem = f1Rem && f2Rem && f3Rem;
+
+        dom.instrumentBar.innerHTML = `
+          <div class="inst-control-group">
+            <span>🧪 Frascos Lavadores (clic para quitar/poner):</span>
+            <button type="button" class="teacher-mini-btn ${f1Rem ? 'active-err' : ''}" id="btn-tp2-f1" style="${f1Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
+              ${f1Rem ? '❌ 1. H₂O (Eliminado)' : '✓ 1. H₂O(l)'}
+            </button>
+            <button type="button" class="teacher-mini-btn ${f2Rem ? 'active-err' : ''}" id="btn-tp2-f2" style="${f2Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
+              ${f2Rem ? '❌ 2. H₂SO₄ (Eliminado)' : '✓ 2. H₂SO₄(c)'}
+            </button>
+            <button type="button" class="teacher-mini-btn ${f3Rem ? 'active-err' : ''}" id="btn-tp2-f3" style="${f3Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
+              ${f3Rem ? '❌ 3. Sílica (Eliminado)' : '✓ 3. Sílica Gel'}
+            </button>
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-fall" style="border-color:#ffd166;color:#ffd166;">
+              ${allRem ? '🔄 Restaurar los 3' : '🗑️ Quitar los 3'}
+            </button>
+            <span class="inst-badge">m₁=${m1.toFixed(4)} g | δ_CNPT=${calc.deltaCntpExpGL.toFixed(3)} g/L</span>
+          </div>
+        `;
+
+        const refreshTp2AfterFlaskToggle = () => {
+          window.AudioEngine.playValve();
+          runTP2Stage(st.stage);
+          updateHud();
+        };
+
+        document.getElementById('btn-tp2-f1').addEventListener('click', () => {
+          st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+          refreshTp2AfterFlaskToggle();
+        });
+        document.getElementById('btn-tp2-f2').addEventListener('click', () => {
+          st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
+          refreshTp2AfterFlaskToggle();
+        });
+        document.getElementById('btn-tp2-f3').addEventListener('click', () => {
+          st.errors.missingSilicaFlask = !st.errors.missingSilicaFlask;
+          refreshTp2AfterFlaskToggle();
+        });
+        document.getElementById('btn-tp2-fall').addEventListener('click', () => {
+          const nextState = !allRem;
+          st.errors.missingWaterFlask = nextState;
+          st.errors.missingH2SO4Flask = nextState;
+          st.errors.missingSilicaFlask = nextState;
+          refreshTp2AfterFlaskToggle();
+        });
+        return;
+      }
     } else if (app.activeTp === 'tp3') {
       const st = window.TP3_VictorMeyer.getState();
       if (st.stage === 'pesada') {
@@ -3122,6 +3219,24 @@ window.LabApp = (function () {
           st.valveAmpAOpen = !st.valveAmpAOpen;
           window.AudioEngine.playValve();
           runTP2Stage('vacio');
+        } else if (st.stage === 'kipp_tren' && cy >= 135 && cy <= 255) {
+          // Clic directo sobre cada uno de los 3 frascos lavadores para eliminarlos o volver a colocarlos
+          if (cx >= 195 && cx <= 255) {
+            st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+            window.AudioEngine.playValve();
+            runTP2Stage('kipp_tren');
+            updateHud();
+          } else if (cx >= 305 && cx <= 365) {
+            st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
+            window.AudioEngine.playValve();
+            runTP2Stage('kipp_tren');
+            updateHud();
+          } else if (cx >= 415 && cx <= 475) {
+            st.errors.missingSilicaFlask = !st.errors.missingSilicaFlask;
+            window.AudioEngine.playValve();
+            runTP2Stage('kipp_tren');
+            updateHud();
+          }
         }
       } else if (app.activeTp === 'tp4') {
         const st = window.TP4_Calorimetria.getState();

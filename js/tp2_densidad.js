@@ -125,15 +125,15 @@ window.TP2_Densidad = (function () {
     const pTotalTorr = state.patmTorr + overpressureTorr;
     state.measured.P_gasAmpolla_torr = pTotalTorr;
 
-    // Presiones parciales de impurezas si faltan frascos en el tren de lavado
+    // Presiones parciales de impurezas si se eliminan frascos en el tren de lavado
     const pvWaterSatTorr = window.LabCommon.getWaterVaporPressureTorr(state.tempAmbC);
     let pWaterTorr = 0;
     if (state.errors.missingH2SO4Flask && state.errors.missingSilicaFlask) {
-      pWaterTorr = pvWaterSatTorr * 0.90;
+      pWaterTorr = pvWaterSatTorr * 0.95; // Sin ningún desecador: gas casi saturado de vapor de H2O (PM = 18.015)
     } else if (state.errors.missingH2SO4Flask) {
-      pWaterTorr = pvWaterSatTorr * 0.45;
+      pWaterTorr = pvWaterSatTorr * 0.60; // Sin H2SO4 la sílica gel sola no alcanza y se satura rápido
     } else if (state.errors.missingSilicaFlask) {
-      pWaterTorr = pvWaterSatTorr * 0.15;
+      pWaterTorr = pvWaterSatTorr * 0.22; // Sin sílica gel pasan trazas de humedad residual
     }
 
     let pHClTorr = 0;
@@ -425,30 +425,68 @@ window.TP2_Densidad = (function () {
     // Llave de salida del Kipp
     window.LabCommon.drawStopcock(ctx, kx + 34, benchY - 78, state.kippPurged || state.ampollaFilledCo2, 'Kipp');
 
-    // 2. TREN PURIFICADOR Y DESECADOR (3 Frascos lavadores en serie)
+    // 2. TREN PURIFICADOR Y DESECADOR (3 Frascos lavadores en serie, clicables para eliminar/colocar)
+    const silicaSaturated = state.errors.missingH2SO4Flask && !state.errors.missingSilicaFlask;
     const flasks = [
       {
         x: 225,
         title: '1. H₂O(l)',
         sub: 'Retiene HCl(g)',
-        color: 'rgba(56, 189, 248, 0.45)',
-        missing: state.errors.missingWaterFlask
+        color: 'rgba(56, 189, 248, 0.48)',
+        missing: state.errors.missingWaterFlask,
+        leakLabel: 'Pasa HCl(g)'
       },
       {
         x: 335,
         title: '2. H₂SO₄(c)',
         sub: 'Deshidratante',
-        color: 'rgba(253, 224, 71, 0.40)',
-        missing: state.errors.missingH2SO4Flask
+        color: 'rgba(253, 224, 71, 0.45)',
+        missing: state.errors.missingH2SO4Flask,
+        leakLabel: 'Pasa H₂O(v)'
       },
       {
         x: 445,
         title: '3. Sílica Gel',
-        sub: 'Secado final',
-        color: 'rgba(96, 165, 250, 0.50)',
-        missing: state.errors.missingSilicaFlask
+        sub: silicaSaturated ? '¡Saturada H₂O!' : 'Secado final',
+        color: silicaSaturated ? 'rgba(244, 114, 182, 0.55)' : 'rgba(96, 165, 250, 0.52)',
+        missing: state.errors.missingSilicaFlask,
+        leakLabel: 'Trazas H₂O(v)'
       }
     ];
+
+    // Panel superior: Monitor de estado del tren lavador y pureza del gas que entra a la ampolla
+    const anyFlaskMissing =
+      state.errors.missingWaterFlask || state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask;
+    window.LabCommon.drawPixelBox(
+      ctx,
+      175,
+      46,
+      335,
+      54,
+      '#131b2e',
+      anyFlaskMissing ? '#ff5964' : '#06d6a0',
+      1.8
+    );
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillStyle = '#ffd166';
+    ctx.fillText('TREN LAVADOR (Clic sobre un frasco para eliminarlo):', 185, 62);
+
+    ctx.font = '9.5px monospace';
+    if (!anyFlaskMissing) {
+      ctx.fillStyle = '#06d6a0';
+      ctx.fillText('✓ 3 Frascos activos → Entra 100% CO₂ seco (PM = 44.0 g/mol)', 185, 78);
+      ctx.fillStyle = '#cbd5e0';
+      ctx.fillText('Hacé clic en el frasco 1, 2 o 3 para quitarlo y ver el efecto.', 185, 92);
+    } else {
+      const leaks = [];
+      if (state.errors.missingWaterFlask) leaks.push('HCl(g) [PM 36.5]');
+      if (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask) leaks.push('H₂O(v) [PM 18.0]');
+      ctx.fillStyle = '#ff5964';
+      ctx.fillText(`⚠️ Entra CO₂ + ${leaks.join(' + ')} a la ampolla`, 185, 78);
+      ctx.fillStyle = '#ff9f1c';
+      ctx.fillText('Impurezas más livianas que CO₂ (44) → m₁ baja → δ por DEFECTO', 185, 92);
+    }
 
     flasks.forEach((f, idx) => {
       // Tubo de conexión desde el elemento previo
@@ -460,21 +498,29 @@ window.TP2_Densidad = (function () {
       ctx.lineTo(f.x - 22, benchY - 78);
       ctx.stroke();
 
-      // Frasco lavador de Dreschel
-      window.LabCommon.drawPixelBox(
-        ctx,
-        f.x - 24,
-        benchY - 72,
-        48,
-        68,
-        f.missing ? 'rgba(255, 89, 100, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-        f.missing ? '#ff5964' : '#e2e8f0',
-        2
-      );
-
       if (!f.missing) {
+        // Frasco lavador de Dreschel instalado
+        window.LabCommon.drawPixelBox(
+          ctx,
+          f.x - 24,
+          benchY - 72,
+          48,
+          68,
+          'rgba(255, 255, 255, 0.08)',
+          silicaSaturated && idx === 2 ? '#f472b6' : '#e2e8f0',
+          2
+        );
+
         ctx.fillStyle = f.color;
         ctx.fillRect(f.x - 22, benchY - 44, 44, 38);
+
+        // Vástago buzo sumergido en el líquido/sílica
+        ctx.strokeStyle = '#cbd5e0';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(f.x - 10, benchY - 78);
+        ctx.lineTo(f.x - 10, benchY - 14);
+        ctx.stroke();
 
         // Burbujeo animado cuando circula CO2
         if (state.kippPurged || state.ampollaFilledCo2) {
@@ -486,23 +532,45 @@ window.TP2_Densidad = (function () {
           ctx.fill();
         }
       } else {
+        // Frasco ELIMINADO: contorno fantasma punteado + manguera de puente directo (BYPASS)
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = 'rgba(255, 89, 100, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(f.x - 24, benchY - 72, 48, 68);
+        ctx.restore();
+
+        // Manguera de puente directo arriba
+        ctx.strokeStyle = '#ff5964';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(f.x - 24, benchY - 78);
+        ctx.lineTo(f.x + 24, benchY - 78);
+        ctx.stroke();
+
         ctx.fillStyle = '#ff5964';
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText('OMITIDO', f.x, benchY - 35);
+        ctx.font = 'bold 9.5px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('ELIMINADO', f.x, benchY - 44);
+        ctx.fillStyle = '#ff9f1c';
+        ctx.font = '8.5px monospace';
+        ctx.fillText(f.leakLabel, f.x, benchY - 28);
+        ctx.fillStyle = '#ffd166';
+        ctx.fillText('[Clic: Poner]', f.x, benchY - 12);
       }
 
       ctx.fillStyle = f.missing ? '#ff5964' : '#7bdff2';
       ctx.font = 'bold 10px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(f.title, f.x, benchY - 88);
-      ctx.fillStyle = '#a0aec0';
+      ctx.fillStyle = f.missing ? '#ff9f1c' : '#a0aec0';
       ctx.font = '9px monospace';
-      ctx.fillText(f.sub, f.x, benchY + 15);
+      ctx.fillText(f.missing ? '[Clic: Colocar]' : '[Clic: Eliminar]', f.x, benchY + 15);
     });
 
     // 3. AMPOLLA DE REGNAULT CONECTADA AL FINAL DEL TREN (Derecha: x = 615)
     const ax = 615, ay = benchY - 58;
-    ctx.strokeStyle = '#9aa5b1';
+    ctx.strokeStyle = anyFlaskMissing ? '#ff9f1c' : '#9aa5b1';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(469, benchY - 78);
@@ -511,11 +579,25 @@ window.TP2_Densidad = (function () {
 
     ctx.beginPath();
     ctx.arc(ax, ay, 36, 0, Math.PI * 2);
-    ctx.fillStyle = state.ampollaFilledCo2 ? 'rgba(6, 214, 160, 0.28)' : 'rgba(255, 255, 255, 0.08)';
+    ctx.fillStyle = state.ampollaFilledCo2
+      ? anyFlaskMissing
+        ? 'rgba(255, 159, 28, 0.26)'
+        : 'rgba(6, 214, 160, 0.28)'
+      : 'rgba(255, 255, 255, 0.08)';
     ctx.fill();
-    ctx.strokeStyle = '#f1faee';
+    ctx.strokeStyle = anyFlaskMissing ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
+
+    // Si se eliminaron frascos desecadores, mostrar gotitas de vapor/humedad en la ampolla
+    if ((state.kippPurged || state.ampollaFilledCo2) && (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask)) {
+      ctx.fillStyle = '#38bdf8';
+      [[-16, -14], [15, -12], [-18, 12], [16, 14]].forEach(([dx, dy]) => {
+        ctx.beginPath();
+        ctx.arc(ax + dx, ay + dy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
 
     window.LabCommon.drawStopcock(ctx, ax - 44, ay, state.ampollaFilledCo2, 'Entrada');
     window.LabCommon.drawStopcock(ctx, ax + 44, ay, state.ampollaFilledCo2, 'Salida');
@@ -523,9 +605,17 @@ window.TP2_Densidad = (function () {
     ctx.fillStyle = '#ffd166';
     ctx.font = 'bold 11px monospace';
     ctx.fillText('AMPOLLA REGNAULT', ax, ay - 48);
-    ctx.fillStyle = state.ampollaFilledCo2 ? '#06d6a0' : '#cbd5e0';
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText(state.ampollaFilledCo2 ? 'LLENA CON CO₂' : 'EN ESPERA', ax, ay + 4);
+    ctx.fillStyle = state.ampollaFilledCo2 ? (anyFlaskMissing ? '#ff9f1c' : '#06d6a0') : '#cbd5e0';
+    ctx.font = 'bold 9.5px monospace';
+    ctx.fillText(
+      state.ampollaFilledCo2
+        ? anyFlaskMissing
+          ? 'CO₂ IMPURO / HÚMEDO'
+          : 'CO₂ PURO Y SECO'
+        : 'EN ESPERA',
+      ax,
+      ay + 4
+    );
   }
 
   function renderEqualizeAndM1Scene(ctx, w, h, tick) {
