@@ -34,6 +34,7 @@ window.TP2_Densidad = (function () {
 
       // Estado interactivo del experimento
       pumpRunning: false,
+      vacuumProgress: 0.0, // 0.0 (a Patm, Hg arriba) -> 1.0 (vacío final, Hg baja e iguala ramas)
       valveAmpAOpen: false,
       valveAmpBOpen: false,
       valveKippOpen: false,
@@ -341,40 +342,113 @@ window.TP2_Densidad = (function () {
     ctx.font = '9px monospace';
     ctx.fillText(state.pumpRunning ? '[ON - Clic: Apagar]' : '[OFF - Clic: Encender]', 110, benchY + 14);
 
-    // Manómetro de vacío
-    let pResMm = state.vacuumDone || state.pumpRunning ? state.errors.residualPressureCmHg * 10.0 : state.patmTorr;
-    if (state.errors.regnaultLeak && (state.vacuumDone || state.pumpRunning)) {
-      pResMm += 68.0;
-    }
-    if (state.errors.turnOffPumpBeforeCloseValve) {
-      pResMm += 95.0;
-    }
-    window.LabCommon.drawPixelBox(ctx, 195, benchY - 115, 115, 58, '#161e2e', '#7bdff2', 2);
+    // 2. MANÓMETRO DE MERCURIO EN U (Rama cerrada izq. vs. Rama conectada al vacío der.)
+    const targetResMm =
+      state.errors.residualPressureCmHg * 10.0 +
+      (state.errors.regnaultLeak ? 68.0 : 0.0) +
+      (state.errors.turnOffPumpBeforeCloseValve ? 95.0 : 0.0);
+
+    const vacProg = state.vacuumDone ? 1.0 : Math.max(0.0, Math.min(1.0, state.vacuumProgress || 0.0));
+    const currentPMmHg = state.patmTorr * (1.0 - vacProg) + targetResMm * vacProg;
+
+    // Caja de soporte con escala milimetrada detrás del tubo en U
+    const mx = 250;
+    const mTopY = benchY - 170;
+    const mBotY = benchY - 26;
+    window.LabCommon.drawPixelBox(ctx, mx - 54, mTopY - 18, 108, 168, '#161e2e', '#7bdff2', 2);
+
     ctx.fillStyle = '#7bdff2';
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText('MANÓMETRO VACÍO', 252, benchY - 98);
-    ctx.fillStyle = pResMm <= 0.5 ? '#06d6a0' : '#ff9f1c';
-    ctx.font = 'bold 12px monospace';
+    ctx.font = 'bold 9.5px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('MANÓMETRO DE Hg', mx, mTopY - 5);
+
+    // Escala graduada central entre las dos ramas del tubo en U
+    ctx.fillStyle = '#fefae0';
+    ctx.fillRect(mx - 6, mTopY + 6, 12, mBotY - mTopY - 14);
+    ctx.fillStyle = '#1f2937';
+    for (let yTick = mTopY + 10; yTick <= mBotY - 12; yTick += 8) {
+      ctx.fillRect(mx - 4, yTick, 8, 1);
+    }
+
+    // Posiciones de las dos ramas del manómetro en U:
+    // Rama izquierda (cerrada arriba, vacío de referencia P=0) y Rama derecha (conectada a la línea de vacío)
+    const xLeftLimb = mx - 18;
+    const xRightLimb = mx + 18;
+    const yEquiv = mTopY + 76; // Nivel donde se igualan ambas ramas cuando P = 0 mmHg (Δh = 0)
+    // Desnivel visual proporcional a la presión actual (a 758 mmHg el Hg llena la rama cerrada arriba; al hacer vacío BAJA hasta yEquiv)
+    // Usamos una escala visual mixta para que incluso presiones residuales de 25-95 mmHg muestren un Δh claramente visible
+    const normFrac = Math.min(1.0, currentPMmHg / state.patmTorr);
+    const visualShiftPx = normFrac > 0.002 ? Math.max(4, normFrac * 52 + (currentPMmHg > 0.5 ? 5 : 0)) : 0;
+
+    const yHgLeft = Math.max(mTopY + 12, yEquiv - visualShiftPx);  // Baja a medida que se hace vacío
+    const yHgRight = Math.min(mBotY - 16, yEquiv + visualShiftPx); // Sube a medida que se hace vacío
+
+    // Tubo de vidrio vacío en U (contorno)
+    ctx.strokeStyle = '#9aa5b1';
+    ctx.lineWidth = 10;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(xLeftLimb, mTopY + 10);
+    ctx.lineTo(xLeftLimb, mBotY - 10);
+    ctx.quadraticCurveTo(mx, mBotY + 4, xRightLimb, mBotY - 10);
+    ctx.lineTo(xRightLimb, mTopY + 10);
+    ctx.stroke();
+
+    // Columna de Mercurio brillante dentro del tubo en U
+    ctx.strokeStyle = '#cfd8dc';
+    ctx.lineWidth = 6.5;
+    ctx.beginPath();
+    ctx.moveTo(xLeftLimb, yHgLeft);
+    ctx.lineTo(xLeftLimb, mBotY - 10);
+    ctx.quadraticCurveTo(mx, mBotY + 4, xRightLimb, mBotY - 10);
+    ctx.lineTo(xRightLimb, yHgRight);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+
+    // Flecha indicadora de que el mercurio BAJA en la rama cerrada al evacuar
+    if (state.pumpRunning || (vacProg > 0 && vacProg < 1.0)) {
+      ctx.fillStyle = '#06d6a0';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText('↓ Hg baja', xLeftLimb - 18, yHgLeft + 12);
+    }
+
+    // Líneas punteadas de nivel entre ambos meniscos (Δh)
+    ctx.save();
+    ctx.setLineDash([2, 2]);
+    ctx.strokeStyle = currentPMmHg <= 0.5 ? '#06d6a0' : '#ffd166';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(xLeftLimb, yHgLeft);
+    ctx.lineTo(xRightLimb, yHgLeft);
+    ctx.stroke();
+    ctx.restore();
+
+    // Lectura de Δh (mmHg) debajo del manómetro en U
+    ctx.fillStyle = currentPMmHg <= 0.5 ? '#06d6a0' : '#ff9f1c';
+    ctx.font = 'bold 10.5px monospace';
+    ctx.textAlign = 'center';
     ctx.fillText(
-      state.vacuumDone || state.pumpRunning
-        ? pResMm <= 0.1
-          ? '< 0.1 mmHg'
-          : `${pResMm.toFixed(1)} mmHg`
-        : `${state.patmTorr.toFixed(0)} mmHg`,
-      252,
-      benchY - 74
+      currentPMmHg <= 0.1
+        ? 'Δh ≈ 0 (< 0.1 mmHg)'
+        : `Δh = ${currentPMmHg.toFixed(1)} mmHg`,
+      mx,
+      mBotY + 14
     );
 
     // Ampolla de Regnault conectada al tren de vacío (centro)
-    const ampX = 390, ampY = benchY - 62;
-    // Manguera de vacío
+    const ampX = 405, ampY = benchY - 62;
+    // Manguera de vacío conectando Bomba -> Manómetro en U (rama derecha) -> Llave A de la Ampolla
     ctx.strokeStyle = state.pumpRunning && state.valveAmpAOpen ? '#06d6a0' : '#6c757d';
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 4.5;
     ctx.beginPath();
     ctx.moveTo(173, benchY - 50);
-    ctx.lineTo(252, benchY - 50);
-    ctx.lineTo(252, benchY - 57);
-    ctx.moveTo(252, benchY - 50);
+    ctx.lineTo(192, benchY - 50);
+    ctx.lineTo(192, mTopY - 24);
+    ctx.lineTo(xRightLimb, mTopY - 24);
+    ctx.lineTo(xRightLimb, mTopY + 10);
+    ctx.moveTo(xRightLimb, mTopY - 24);
+    ctx.lineTo(325, mTopY - 24);
+    ctx.lineTo(325, ampY);
     ctx.lineTo(ampX - 48, ampY);
     ctx.stroke();
 

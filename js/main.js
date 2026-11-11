@@ -1053,28 +1053,43 @@ window.LabApp = (function () {
             label: st.valveAmpBOpen ? '⚠️ Llave B (Inferior): ABIERTA (Entra aire → Clic para CERRAR)' : '🔒 Llave B (Inferior): CERRADA (Correcto)',
             onClick: () => {
               st.valveAmpBOpen = !st.valveAmpBOpen;
+              if (st.valveAmpBOpen) {
+                st.vacuumDone = false;
+                st.vacuumProgress = 0.0;
+              }
               window.AudioEngine.playValve();
               runTP2Stage('vacio');
             }
           },
           {
             label: st.vacuumDone && st.errors.residualPressureCmHg === 0
-              ? '✓ Bomba rotatoria: Vacío óptimo alcanzado (< 0,1 mmHg)'
-              : '🔌 Encender bomba rotatoria y evacuar aire (< 0,1 mmHg)',
+              ? '✓ Bomba rotatoria: Vacío óptimo alcanzado (Δh Hg < 0,1 mmHg)'
+              : st.pumpRunning
+              ? '⏳ Evacuando ampolla... Observá cómo baja el mercurio del manómetro (↓ Hg)'
+              : '🔌 Encender bomba rotatoria y evacuar aire (ver bajar columna de Hg < 0,1 mmHg)',
             styleClass: !st.vacuumDone ? 'rpg-btn-accent' : '',
-            disabled: !st.valveAmpAOpen || st.valveAmpBOpen,
+            disabled: !st.valveAmpAOpen || st.valveAmpBOpen || st.pumpRunning,
             onClick: () => {
               st.pumpRunning = true;
+              st.vacuumDone = false;
+              st.vacuumProgress = 0.0;
               st.errors.residualPressureCmHg = 0.0;
               st.errors.turnOffPumpBeforeCloseValve = false;
               window.AudioEngine.playPump();
-              setTimeout(() => {
-                st.pumpRunning = false;
-                st.vacuumDone = true;
-                st.score += 10;
-                window.TP2_Densidad.computeM0();
-                runTP2Stage('vacio');
-              }, 400);
+              runTP2Stage('vacio');
+              const iv = setInterval(() => {
+                st.vacuumProgress = Math.min(1.0, (st.vacuumProgress || 0) + 0.065);
+                updateHud();
+                if (st.vacuumProgress >= 1.0) {
+                  clearInterval(iv);
+                  st.pumpRunning = false;
+                  st.vacuumDone = true;
+                  st.score += 10;
+                  window.TP2_Densidad.computeM0();
+                  runTP2Stage('vacio');
+                  updateHud();
+                }
+              }, 75);
             }
           },
           {
@@ -3655,28 +3670,39 @@ window.LabApp = (function () {
         if (st.stage === 'vacio') {
           if (cx >= 48 && cx <= 173 && cy >= 155 && cy <= 245) {
             // Clic en la Bomba de Vacío
-            if (st.valveAmpAOpen && !st.valveAmpBOpen) {
-              st.pumpRunning = !st.pumpRunning;
-              if (st.pumpRunning) {
-                st.errors.residualPressureCmHg = 0.0;
-                window.AudioEngine.playPump();
-                setTimeout(() => {
+            if (st.valveAmpAOpen && !st.valveAmpBOpen && !st.pumpRunning) {
+              st.pumpRunning = true;
+              st.vacuumDone = false;
+              st.vacuumProgress = 0.0;
+              st.errors.residualPressureCmHg = 0.0;
+              st.errors.turnOffPumpBeforeCloseValve = false;
+              window.AudioEngine.playPump();
+              runTP2Stage('vacio');
+              const iv = setInterval(() => {
+                st.vacuumProgress = Math.min(1.0, (st.vacuumProgress || 0) + 0.065);
+                updateHud();
+                if (st.vacuumProgress >= 1.0) {
+                  clearInterval(iv);
                   st.pumpRunning = false;
                   st.vacuumDone = true;
                   window.TP2_Densidad.computeM0();
                   runTP2Stage('vacio');
-                }, 380);
-              }
-              runTP2Stage('vacio');
+                  updateHud();
+                }
+              }, 75);
             }
-          } else if (cx >= 325 && cx <= 372 && cy >= 150 && cy <= 205) {
+          } else if (cx >= 335 && cx <= 388 && cy >= 150 && cy <= 205) {
             // Clic en Llave A de la ampolla de Regnault
             st.valveAmpAOpen = !st.valveAmpAOpen;
             window.AudioEngine.playValve();
             runTP2Stage('vacio');
-          } else if (cx >= 412 && cx <= 458 && cy >= 150 && cy <= 205) {
+          } else if (cx >= 420 && cx <= 472 && cy >= 150 && cy <= 205) {
             // Clic en Llave B de la ampolla de Regnault
             st.valveAmpBOpen = !st.valveAmpBOpen;
+            if (st.valveAmpBOpen) {
+              st.vacuumDone = false;
+              st.vacuumProgress = 0.0;
+            }
             window.AudioEngine.playValve();
             runTP2Stage('vacio');
           }
