@@ -111,7 +111,10 @@ window.TP3_VictorMeyer = (function () {
         notInThermalRegime: false, // Equipo no estaba en régimen (T en ascenso): aire se dilata (+V -> PM por DEFECTO)
         oilBath147C: false,        // Baño de aceite a 147 °C en régimen: vaporiza completo y desplaza igual n de aire (SIN ERROR)
         ignorePvWater: false,      // No restar P_v(H2O) en el cálculo (+P -> PM por DEFECTO)
-        ignoreWaterColumn: false   // No restar columna hidrostática h/13.6 en el cálculo (+P -> PM por DEFECTO)
+        ignoreWaterColumn: false,  // No restar columna hidrostática h/13.6 en el cálculo (+P -> PM por DEFECTO)
+        useBathTempError: false,   // Usar T del baño (373 K) en lugar de T de la campana (295 K) en PV=nRT (+T -> PM por EXCESO)
+        airBubbleInBellStart: false, // Burbuja de aire inicial (+5.5 mL) en la campana antes de largar la ampolla (+V -> PM por DEFECTO)
+        liquidBoilsAboveBath: false  // Líquido con T_eb > T_baño (no hierve totalmente, solo evapora parcial -> -V -> PM por EXCESO)
       },
 
       calculated: null,
@@ -142,6 +145,9 @@ window.TP3_VictorMeyer = (function () {
     if (state.errors.ampouleStuckTop) {
       effectiveMassG *= 0.64; // Queda trabada arriba en zona fría: no se vaporiza completamente (-36% de volumen)
     }
+    if (state.errors.liquidBoilsAboveBath) {
+      effectiveMassG *= 0.45; // Si T_eb > T_baño, no entra en ebullición franca y vaporiza menos de la mitad (-55% de volumen)
+    }
 
     let molesDisplaced = effectiveMassG / sub.mw;
     if (state.errors.skipPurge) {
@@ -169,7 +175,9 @@ window.TP3_VictorMeyer = (function () {
     const pGasRealMmHg = Math.max(100, state.patmMmHg - pvMmHg - phMmHg);
     const pGasRealAtm = pGasRealMmHg / 760.0;
 
-    const volRealMl = ((molesDisplaced * R_ATM * T_K) / pGasRealAtm) * 1000.0;
+    const volRealMl =
+      ((molesDisplaced * R_ATM * T_K) / pGasRealAtm) * 1000.0 +
+      (state.errors.airBubbleInBellStart ? 5.5 : 0.0);
     state.unclampedVolMl = Math.max(2.0, volRealMl);
     state.bellOverflowed = state.unclampedVolMl > MAX_BELL_VOL_ML;
 
@@ -190,7 +198,8 @@ window.TP3_VictorMeyer = (function () {
   function performCalculations() {
     if (state.collectedVolMl <= 0) computeCollectedVolume();
     const sub = getCurrentSubstance();
-    const T_K = state.tempAmbC + 273.15;
+    const T_K_real = state.tempAmbC + 273.15;
+    const T_K = state.errors.useBathTempError ? (state.errors.oilBath147C ? 147.0 + 273.15 : 100.0 + 273.15) : T_K_real;
     const pvRealMmHg = window.LabCommon.getWaterVaporPressureTorr(state.tempAmbC);
     const phRealMmHg = (state.waterColumnCm * 10.0) / 13.5951;
 

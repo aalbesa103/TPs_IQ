@@ -191,6 +191,21 @@ check('Eliminación de los 3 Frascos Lavadores (HCl + H₂O -> mayor error por D
 st2.errors.missingWaterFlask = false;
 st2.errors.missingH2SO4Flask = false;
 st2.errors.missingSilicaFlask = false;
+st2.errors.regnaultLeak = true;
+const calc2Leak = window.TP2_Densidad.performFinalCalculations();
+check('Ampolla de Regnault pierde un poquito (+m₀ aire -> DEFECTO)', calc2Leak.deltaCntpExpGL < calc2.deltaCntpExpGL, `δ_aparente baja a ${calc2Leak.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.regnaultLeak = false;
+st2.errors.wrongValveCloseOrder = true;
+const calc2ValveOrder = window.TP2_Densidad.performFinalCalculations();
+check('Cerrar primero Kipp antes que salida a atmósfera (-m₁ -> DEFECTO)', calc2ValveOrder.deltaCntpExpGL < calc2.deltaCntpExpGL, `δ_aparente baja a ${calc2ValveOrder.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.wrongValveCloseOrder = false;
+st2.errors.wetExteriorM2 = true;
+const calc2Wet = window.TP2_Densidad.performFinalCalculations();
+check('Ampolla sin secar por fuera en m₂ (+V -> DEFECTO)', calc2Wet.deltaCntpExpGL < calc2.deltaCntpExpGL, `δ_aparente baja a ${calc2Wet.deltaCntpExpGL.toFixed(4)} g/L`);
+
+st2.errors.wetExteriorM2 = false;
 st2.errors.so3ImpurityInKipp = true;
 const calc2SO3 = window.TP2_Densidad.performFinalCalculations();
 check('Simulación de error por SO₃ en el Kipp (PM 80 > 44 -> EXCESO)', calc2SO3.deltaCntpExpGL > calc2.deltaCntpExpGL, `δ_aparente sube a ${calc2SO3.deltaCntpExpGL.toFixed(4)} g/L`);
@@ -244,6 +259,12 @@ st3.errors.oilBath147C = true;
 window.TP3_VictorMeyer.computeCollectedVolume();
 const c3Oil = window.TP3_VictorMeyer.performCalculations();
 check('Simulación de Parcial: Baño de aceite a 147 °C en régimen (SIN ERROR)', Math.abs(c3Oil.mwExp - 119.38) < 0.5, `PM_exp = ${c3Oil.mwExp.toFixed(2)} g/mol (exacto)`);
+
+st3.errors.oilBath147C = false;
+st3.errors.useBathTempError = true;
+const c3BathT = window.TP3_VictorMeyer.performCalculations();
+check('Simulación de Parcial: Usar T del baño (373 K) en PV=nRT (+T -> PM por EXCESO)', c3BathT.mwExp > 145, `PM_exp = ${c3BathT.mwExp.toFixed(1)} g/mol (> 119.38)`);
+st3.errors.useBathTempError = false;
 ['preparacion', 'pesada', 'vaporizacion', 'lectura', 'calculos', 'quiz'].forEach(stage => {
   st3.stage = stage;
   window.TP3_VictorMeyer.renderScene(fakeCanvas);
@@ -263,6 +284,13 @@ st4.acidType = 'CH3COOH';
 window.TP4_Calorimetria.generateNeutralizationCurve();
 const c4Weak = window.TP4_Calorimetria.performFinalCalculations();
 check('Menor calor liberado en Ácido Débil (CH₃COOH + NaOH)', Math.abs(c4Weak.dH_exp_kcal_eq) < Math.abs(c4Strong.dH_exp_kcal_eq), `ΔH = ${c4Weak.dH_exp_kcal_eq.toFixed(2)} kcal/eq`);
+
+st4.acidType = 'HCl';
+st4.errors.doubleVolumesSameConc = true;
+window.TP4_Calorimetria.generateNeutralizationCurve();
+const c4Double = window.TP4_Calorimetria.performFinalCalculations();
+check('Duplicar volúmenes en Calorimetría: Q se duplica pero ΔH kcal/eq es intensiva', Math.abs(c4Double.Q_neut_cal) > Math.abs(c4Strong.Q_neut_cal) * 1.9 && Math.abs(c4Double.dH_exp_kcal_eq - -13.7) < 0.15, `Q_neut = ${c4Double.Q_neut_cal.toFixed(1)} cal, ΔH = ${c4Double.dH_exp_kcal_eq.toFixed(2)} kcal/eq`);
+st4.errors.doubleVolumesSameConc = false;
 ['equivalente_agua', 'neutralizacion', 'marcha_grafica', 'dilucion', 'calculos', 'quiz'].forEach(stage => {
   st4.stage = stage;
   window.TP4_Calorimetria.renderScene(fakeCanvas);

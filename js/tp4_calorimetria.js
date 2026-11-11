@@ -50,11 +50,14 @@ window.TP4_Calorimetria = (function () {
       dilDone: false,
       deltaTDilC: 0.052,
 
-      // Errores / Modificadores de Modo Docente
+      // Errores / Modificadores de Modo Docente y Parciales
       errors: {
-        nonAdiabaticLoss: false, // Termo con pérdidas hacia el exterior (subestima Delta T)
-        ignoreDilution: false,   // No restar Q_dilución
-        ignoreWaterEquiv: false  // Asumir E = 0 cal/°C
+        nonAdiabaticLoss: false,    // Termo con pérdidas hacia el exterior (subestima Delta T -> |ΔH| por DEFECTO)
+        ignoreDilution: false,      // No restar Q_dilución (sobreestima |Q_neut| -> |ΔH| por EXCESO)
+        ignoreWaterEquiv: false,    // Asumir E = 0 cal/°C (subestima capacidad calorífica -> |ΔH| por DEFECTO)
+        incompleteAcidBlow: false,  // Queda parte del ácido sin salir de la ampolla al insuflar (-n_real -> |ΔH| por DEFECTO)
+        acidHotterThanBase: false,  // Ácido en la ampolla a mayor T inicial que la base (+ΔT sensible -> |ΔH| por EXCESO)
+        doubleVolumesSameConc: false // Duplicar volúmenes (300 mL totales y 0.04 eq): Q se duplica pero ΔH kcal/eq NO cambia
       },
 
       calculated: null,
@@ -99,14 +102,17 @@ window.TP4_Calorimetria = (function () {
    * según la Figura 3 de la Guía IQ 2019 (pág. 54)
    */
   function generateNeutralizationCurve() {
-    const mSolG = state.acidVolMl + state.baseVolMl + state.waterAddedMl; // 150.0 g
+    const volMult = state.errors.doubleVolumesSameConc ? 2.0 : 1.0;
+    const mSolG = (state.acidVolMl + state.baseVolMl + state.waterAddedMl) * volMult; // 150.0 g o 300.0 g
     const totalCap = mSolG * 1.0 + state.realWaterEquivE; // ~160.2 cal/°C
-    const nEq = (state.acidVolMl / 1000.0) * state.acidConcN; // 0.0200 eq
+    const realBlowFactor = state.errors.incompleteAcidBlow ? 0.84 : 1.0; // Si queda ácido sin caer de la ampolla (84% cae)
+    const nEqReal = (state.acidVolMl / 1000.0) * state.acidConcN * volMult * realBlowFactor;
 
     const dH_kcal = state.acidType === 'HCl' ? DH_TEO_STRONG_KCAL : DH_TEO_WEAK_KCAL;
-    const qNeutCal = Math.abs(dH_kcal * 1000.0 * nEq); // ~274.0 cal liberadas
-    const qDilCal = state.acidType === 'HCl' ? 8.32 : 2.10; // calor de dilución exotérmico
-    const qTotalCal = qNeutCal + qDilCal; // ~282.32 cal
+    const qNeutCal = Math.abs(dH_kcal * 1000.0 * nEqReal); // ~274.0 cal liberadas
+    const qDilCal = (state.acidType === 'HCl' ? 8.32 : 2.10) * volMult * realBlowFactor; // calor de dilución exotérmico
+    const sensibleBonusCal = state.errors.acidHotterThanBase ? 32.0 * volMult : 0.0; // Si el ácido estaba más caliente antes de insuflar
+    const qTotalCal = qNeutCal + qDilCal + sensibleBonusCal;
 
     let idealDeltaT = qTotalCal / totalCap; // ~1.762 °C
     if (state.errors.nonAdiabaticLoss) {
@@ -153,7 +159,8 @@ window.TP4_Calorimetria = (function () {
     if (!state.equivDone) computeEquivExperiment();
     if (state.neutPoints.length === 0) generateNeutralizationCurve();
 
-    const mSolG = state.acidVolMl + state.baseVolMl + state.waterAddedMl; // 150.0 g
+    const volMult = state.errors.doubleVolumesSameConc ? 2.0 : 1.0;
+    const mSolG = (state.acidVolMl + state.baseVolMl + state.waterAddedMl) * volMult; // 150.0 g o 300.0 g
     const E_used = state.errors.ignoreWaterEquiv ? 0.0 : state.calcWaterEquivE;
     const sysHeatCap = mSolG * 1.0 + E_used; // cal/°C
 
@@ -162,7 +169,7 @@ window.TP4_Calorimetria = (function () {
     const Q_dil_cal = state.errors.ignoreDilution ? 0.0 : -sysHeatCap * state.deltaTDilC;
     const Q_neut_cal = Q_total_cal - Q_dil_cal;
 
-    const nEq = (state.acidVolMl / 1000.0) * state.acidConcN; // 0.0200 equivalentes
+    const nEq = (state.acidVolMl / 1000.0) * state.acidConcN * volMult; // 0.0200 o 0.0400 equivalentes nominales
     const dH_exp_kcal_eq = (Q_neut_cal / 1000.0) / nEq;
     const relErrorPercent = ((dH_exp_kcal_eq - DH_TEO_STRONG_KCAL) / Math.abs(DH_TEO_STRONG_KCAL)) * 100.0;
 

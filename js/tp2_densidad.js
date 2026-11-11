@@ -58,16 +58,26 @@ window.TP2_Densidad = (function () {
 
       // Configuración de Errores Experimentales (modificables en Modo Docente o por decisiones del alumno)
       errors: {
-        residualPressureCmHg: 0.0,    // 0.0 = vacío óptimo (<0.1 mmHg); >0 deja aire residual en m0 (Error por DEFECTO)
-        skipEqualize180: false,       // Si no gira 180° la llave, queda sobrepresión hidrostática de HCl del Kipp (Error por EXCESO)
-        hclHeadCm: 45.0,              // Altura de columna de HCl en el Kipp (cm, d=1.07 g/mL)
-        missingWaterFlask: false,     // Falta frasco 1 (H2O): pasa HCl(g) arrastrado (PM 36.5 < 44 -> Error por DEFECTO)
-        missingH2SO4Flask: false,     // Falta frasco 2 (H2SO4): pasa vapor de agua (PM 18 < 44 -> Error por DEFECTO)
-        missingSilicaFlask: false,    // Falta frasco 3 (Sílica): quedan trazas de humedad (Error por DEFECTO)
-        so3ImpurityInKipp: false,     // Se genera SO3(g) (PM 80 > 44) no retenido en el tren (Parcial 2023 -> Error por EXCESO)
-        unfilledWaterMl: 0.0,         // Volumen sin llenar en cuello al medir m2 (mL)
-        airBubblesWaterMl: 0.0        // Burbujas adheridas al llenar con agua en m2 (mL -> subestima V -> Error por EXCESO)
+        residualPressureCmHg: 0.0,       // 0.0 = vacío óptimo (<0.1 mmHg); >0 deja aire residual en m0 (Error por DEFECTO)
+        regnaultLeak: false,             // La ampolla de Regnault pierde un poquito por el robinete (entra aire en m0 -> Error por DEFECTO)
+        turnOffPumpBeforeCloseValve: false, // Apagar la bomba antes de cerrar Llave A (reingresa aire -> Error por DEFECTO)
+        skipTrainPurge: false,           // No purgar el aire del tren antes de llenar la ampolla (queda aire PM 28.9 < 44 -> DEFECTO)
+        wrongValveCloseOrder: false,     // Cerrar primero Kipp antes que la salida a la atmósfera (retrodifunde aire -> DEFECTO)
+        skipEqualize180: false,          // Si no gira 180° la llave, queda sobrepresión hidrostática de HCl del Kipp (Error por EXCESO)
+        leaveValveOpenTooLong180: false, // Dejar la llave abierta mucho tiempo al equilibrar (escapa CO2 y entra aire -> DEFECTO)
+        hclHeadCm: 45.0,                 // Altura de columna de HCl en el Kipp (cm, d=1.09 g/mL)
+        missingWaterFlask: false,        // Falta frasco 1 (H2O): pasa HCl(g) arrastrado (PM 36.5 < 44 -> Error por DEFECTO)
+        missingH2SO4Flask: false,        // Falta frasco 2 (H2SO4): pasa vapor de agua (PM 18 < 44 -> Error por DEFECTO)
+        missingSilicaFlask: false,       // Falta frasco 3 (Sílica): quedan trazas de humedad (Error por DEFECTO)
+        so3ImpurityInKipp: false,        // Se genera SO3(g) (PM 80 > 44) no retenido en el tren (Parcial 2023 -> Error por EXCESO)
+        unfilledWaterMl: 0.0,            // Volumen sin llenar en cuello al medir m2 (mL)
+        airBubblesWaterMl: 0.0,          // Burbujas adheridas al llenar con agua en m2 (mL -> subestima V -> Error por EXCESO)
+        wetExteriorM2: false             // Ampolla mojada por fuera al pesar m2 (+m2 -> sobreestima V -> Error por DEFECTO)
       },
+
+      // Registro interactivo del orden de apertura/cierre de llaves en el tren Kipp
+      gasFlowingThroughAmpolla: false,
+      closeSequenceLog: [],
 
       // Valores medidos en balanza y resultados calculados
       measured: {
@@ -98,8 +108,18 @@ window.TP2_Densidad = (function () {
   function computeM0() {
     const volL = state.realVolumeMl / 1000.0;
     const tempK = state.tempAmbC + 273.15;
-    const pResTorr = Math.max(0, state.errors.residualPressureCmHg * 10.0);
-    const pResAtm = pResTorr / 760.0;
+    let pResTorr = Math.max(0, state.errors.residualPressureCmHg * 10.0);
+
+    // Si la ampolla de Regnault pierde un poquito por el robinete (microfuga), entra aire lentamente (~68 mmHg)
+    if (state.errors.regnaultLeak) {
+      pResTorr += 68.0;
+    }
+    // Si apagó la bomba antes de cerrar la Llave A, reingresa aire a la ampolla (~95 mmHg)
+    if (state.errors.turnOffPumpBeforeCloseValve) {
+      pResTorr += 95.0;
+    }
+
+    const pResAtm = Math.min(state.patmTorr, pResTorr) / 760.0;
 
     const mAirRes = idealGasMassG(volL, tempK, pResAtm, PM_AIR);
     state.measured.masaAireResidual_g = mAirRes;
@@ -146,8 +166,21 @@ window.TP2_Densidad = (function () {
       pSO3Torr = pTotalTorr * 0.06; // 6% de SO3 gaseoso no retenido (PM = 80.06 > 44)
     }
 
-    // Aire residual que no fue barrido si el vacío fue malo (parte permanece)
-    const pResTorr = Math.max(0, state.errors.residualPressureCmHg * 10.0) * 0.25;
+    // Aire residual / infiltrado por errores de purga, orden de cierre de llaves, microfuga o llave abierta de más
+    let pResTorr = Math.max(0, state.errors.residualPressureCmHg * 10.0) * 0.25;
+    if (state.errors.skipTrainPurge) {
+      pResTorr += pTotalTorr * 0.085; // 8.5% de aire del tren que no fue purgado (PM = 28.97 < 44)
+    }
+    if (state.errors.wrongValveCloseOrder) {
+      pResTorr += pTotalTorr * 0.065; // Al cerrar Kipp antes que la salida a la atmósfera, retrodifunde aire
+    }
+    if (state.errors.leaveValveOpenTooLong180) {
+      pResTorr += pTotalTorr * 0.075; // Al dejar abierta la llave varios minutos en el giro de 180°, escapa CO2 y entra aire
+    }
+    if (state.errors.regnaultLeak) {
+      pResTorr += pTotalTorr * 0.035; // Difusión lenta por el robinete con pérdida
+    }
+
     const pCO2Torr = Math.max(0, pTotalTorr - pWaterTorr - pHClTorr - pSO3Torr - pResTorr);
 
     const mCO2 = idealGasMassG(volL, tempK, pCO2Torr / 760.0, PM_CO2);
@@ -174,8 +207,9 @@ window.TP2_Densidad = (function () {
       state.realVolumeMl - state.errors.unfilledWaterMl - state.errors.airBubblesWaterMl
     );
     const waterMassG = effectiveWaterVolMl * rhoWater;
+    const wetExteriorBonusG = state.errors.wetExteriorM2 ? 4.80 : 0.0; // Gotas de agua sin secar por fuera (+4.8 g -> sobreestima V -> DEFECTO)
 
-    state.measured.m2_g = state.realEmptyMassG + waterMassG;
+    state.measured.m2_g = state.realEmptyMassG + waterMassG + wetExteriorBonusG;
     return state.measured.m2_g;
   }
 
@@ -267,8 +301,17 @@ window.TP2_Densidad = (function () {
   function renderVacuumAndM0Scene(ctx, w, h, tick) {
     const benchY = h - 62;
 
-    // 1. Bomba rotatoria de vacío a la izquierda
-    window.LabCommon.drawPixelBox(ctx, 48, benchY - 78, 125, 78, '#2b3448', '#9aa5b1', 2);
+    // 1. Bomba rotatoria de vacío a la izquierda (Clicable)
+    window.LabCommon.drawPixelBox(
+      ctx,
+      48,
+      benchY - 78,
+      125,
+      78,
+      '#2b3448',
+      state.pumpRunning ? '#06d6a0' : '#9aa5b1',
+      2
+    );
     ctx.fillStyle = '#ffd166';
     ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'center';
@@ -283,7 +326,7 @@ window.TP2_Densidad = (function () {
     ctx.arc(0, 0, 18, 0, Math.PI * 2);
     ctx.fillStyle = '#1f2937';
     ctx.fill();
-    ctx.strokeStyle = state.vacuumDone ? '#06d6a0' : '#cbd5e0';
+    ctx.strokeStyle = state.pumpRunning ? '#06d6a0' : state.vacuumDone ? '#7bdff2' : '#cbd5e0';
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.beginPath();
@@ -294,8 +337,18 @@ window.TP2_Densidad = (function () {
     ctx.stroke();
     ctx.restore();
 
+    ctx.fillStyle = state.pumpRunning ? '#06d6a0' : '#cbd5e0';
+    ctx.font = '9px monospace';
+    ctx.fillText(state.pumpRunning ? '[ON - Clic: Apagar]' : '[OFF - Clic: Encender]', 110, benchY + 14);
+
     // Manómetro de vacío
-    const pResMm = state.vacuumDone ? state.errors.residualPressureCmHg * 10.0 : 758.0;
+    let pResMm = state.vacuumDone || state.pumpRunning ? state.errors.residualPressureCmHg * 10.0 : state.patmTorr;
+    if (state.errors.regnaultLeak && (state.vacuumDone || state.pumpRunning)) {
+      pResMm += 68.0;
+    }
+    if (state.errors.turnOffPumpBeforeCloseValve) {
+      pResMm += 95.0;
+    }
     window.LabCommon.drawPixelBox(ctx, 195, benchY - 115, 115, 58, '#161e2e', '#7bdff2', 2);
     ctx.fillStyle = '#7bdff2';
     ctx.font = 'bold 10px monospace';
@@ -303,7 +356,7 @@ window.TP2_Densidad = (function () {
     ctx.fillStyle = pResMm <= 0.5 ? '#06d6a0' : '#ff9f1c';
     ctx.font = 'bold 12px monospace';
     ctx.fillText(
-      state.vacuumDone
+      state.vacuumDone || state.pumpRunning
         ? pResMm <= 0.1
           ? '< 0.1 mmHg'
           : `${pResMm.toFixed(1)} mmHg`
@@ -315,7 +368,7 @@ window.TP2_Densidad = (function () {
     // Ampolla de Regnault conectada al tren de vacío (centro)
     const ampX = 390, ampY = benchY - 62;
     // Manguera de vacío
-    ctx.strokeStyle = '#6c757d';
+    ctx.strokeStyle = state.pumpRunning && state.valveAmpAOpen ? '#06d6a0' : '#6c757d';
     ctx.lineWidth = 5;
     ctx.beginPath();
     ctx.moveTo(173, benchY - 50);
@@ -325,36 +378,55 @@ window.TP2_Densidad = (function () {
     ctx.lineTo(ampX - 48, ampY);
     ctx.stroke();
 
+    const hasAirLeakOrRes =
+      state.errors.residualPressureCmHg > 0 ||
+      state.errors.regnaultLeak ||
+      state.errors.turnOffPumpBeforeCloseValve;
+
     // Esfera de vidrio de la ampolla de Regnault
     ctx.beginPath();
     ctx.arc(ampX, ampY, 34, 0, Math.PI * 2);
     ctx.fillStyle = state.vacuumDone
-      ? state.errors.residualPressureCmHg > 0
+      ? hasAirLeakOrRes
         ? 'rgba(255, 159, 28, 0.25)'
         : 'rgba(6, 214, 160, 0.10)'
       : 'rgba(255, 255, 255, 0.18)';
     ctx.fill();
-    ctx.strokeStyle = state.errors.residualPressureCmHg > 0 ? '#ff9f1c' : '#f1faee';
+    ctx.strokeStyle = hasAirLeakOrRes ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    if (state.vacuumDone && state.errors.residualPressureCmHg > 0) {
+    if (state.errors.regnaultLeak) {
+      // Animación de microfuga en el robinete de la ampolla de Regnault
+      const leakOffset = (tick * 1.5) % 18;
+      ctx.fillStyle = '#ff5964';
+      ctx.beginPath();
+      ctx.arc(ampX - 36 + leakOffset * 0.7, ampY - 12 + leakOffset * 0.3, 2.5, 0, Math.PI * 2);
+      ctx.arc(ampX - 28 + leakOffset * 0.5, ampY - 6 + leakOffset * 0.4, 2.0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff5964';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('💨 Pierde un poquito (entra aire)', ampX, ampY - 58);
+    }
+
+    if (hasAirLeakOrRes && (state.vacuumDone || state.m0Weighed)) {
       ctx.fillStyle = '#ff9f1c';
       ctx.font = 'bold 9.5px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('⚠️ Aire residual', ampX, ampY + 3);
+      ctx.fillText(state.errors.regnaultLeak ? '⚠️ Entra aire (+m₀)' : '⚠️ Aire residual', ampX, ampY + 3);
     }
 
-    // Dos llaves de vidrio esmerilado
-    window.LabCommon.drawStopcock(ctx, ampX - 42, ampY, state.valveAmpAOpen || state.pumpRunning, 'Llave A');
+    // Dos llaves de vidrio esmerilado (Clicables individualmente)
+    window.LabCommon.drawStopcock(ctx, ampX - 42, ampY, state.valveAmpAOpen, 'Llave A');
     window.LabCommon.drawStopcock(ctx, ampX + 42, ampY, state.valveAmpBOpen, 'Llave B');
 
     ctx.fillStyle = '#f8f9fa';
     ctx.font = 'bold 11px monospace';
-    ctx.fillText('Ampolla de Regnault', ampX, ampY - 46);
+    ctx.fillText('Ampolla de Regnault', ampX, ampY - 44);
     ctx.fillStyle = '#ffd166';
-    ctx.font = '10px monospace';
-    ctx.fillText('(Clic en Llave A para abrir/cerrar)', ampX, ampY + 50);
+    ctx.font = '9.5px monospace';
+    ctx.fillText('[Clic en Bomba / Llave A / Llave B para operar]', ampX, ampY + 50);
 
     // Balanza analítica a la derecha para pesar m0
     const m0Str = state.m0Weighed && state.measured.m0_g !== null
@@ -372,6 +444,8 @@ window.TP2_Densidad = (function () {
 
   function renderKippTrainScene(ctx, w, h, tick) {
     const benchY = h - 62;
+    const isFlowing = state.valveKippOpen && state.valveAmpAOpen && state.valveAmpBOpen;
+    const isKippBlocked = state.valveKippOpen && (!state.valveAmpAOpen || !state.valveAmpBOpen);
 
     // 1. APARATO DE KIPP (Izquierda: x = 95)
     const kx = 95;
@@ -385,7 +459,7 @@ window.TP2_Densidad = (function () {
     ctx.stroke();
 
     // Bulbo intermedio (piedras de mármol CaCO3 + gas CO2)
-    ctx.fillStyle = state.kippPurged ? 'rgba(6, 214, 160, 0.22)' : 'rgba(255, 255, 255, 0.12)';
+    ctx.fillStyle = isFlowing || state.kippPurged ? 'rgba(6, 214, 160, 0.22)' : 'rgba(255, 255, 255, 0.12)';
     ctx.beginPath();
     ctx.arc(kx, benchY - 74, 26, 0, Math.PI * 2);
     ctx.fill();
@@ -397,8 +471,8 @@ window.TP2_Densidad = (function () {
       ctx.fillRect(kx + i - 3, benchY - 64, 6, 5);
     }
 
-    // Bulbo superior con vástago largo cónico
-    ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
+    // Bulbo superior con vástago largo cónico (si hay sobrepresión sube el nivel de HCl)
+    ctx.fillStyle = isKippBlocked ? 'rgba(250, 204, 21, 0.65)' : 'rgba(250, 204, 21, 0.35)';
     ctx.beginPath();
     ctx.arc(kx, benchY - 128, 20, 0, Math.PI * 2);
     ctx.fill();
@@ -422,8 +496,8 @@ window.TP2_Densidad = (function () {
     ctx.font = '9px monospace';
     ctx.fillText('CaCO₃ + 2HCl', kx, benchY + 15);
 
-    // Llave de salida del Kipp
-    window.LabCommon.drawStopcock(ctx, kx + 34, benchY - 78, state.kippPurged || state.ampollaFilledCo2, 'Kipp');
+    // Llave de salida del Kipp (Clicable)
+    window.LabCommon.drawStopcock(ctx, kx + 34, benchY - 78, state.valveKippOpen, 'Llave Kipp');
 
     // 2. TREN PURIFICADOR Y DESECADOR (3 Frascos lavadores en serie, clicables para eliminar/colocar)
     const silicaSaturated = state.errors.missingH2SO4Flask && !state.errors.missingSilicaFlask;
@@ -454,44 +528,53 @@ window.TP2_Densidad = (function () {
       }
     ];
 
-    // Panel superior: Monitor de estado del tren lavador y pureza del gas que entra a la ampolla
+    // Panel superior: Monitor de estado del tren lavador y de las 3 llaves
     const anyFlaskMissing =
       state.errors.missingWaterFlask || state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask;
+    const anyOrderErr =
+      state.errors.skipTrainPurge || state.errors.wrongValveCloseOrder || state.errors.regnaultLeak;
     window.LabCommon.drawPixelBox(
       ctx,
-      175,
-      46,
-      335,
-      54,
+      172,
+      44,
+      368,
+      58,
       '#131b2e',
-      anyFlaskMissing ? '#ff5964' : '#06d6a0',
+      anyFlaskMissing || anyOrderErr ? '#ff5964' : '#06d6a0',
       1.8
     );
     ctx.textAlign = 'left';
-    ctx.font = 'bold 10px monospace';
+    ctx.font = 'bold 9.5px monospace';
     ctx.fillStyle = '#ffd166';
-    ctx.fillText('TREN LAVADOR (Clic sobre un frasco para eliminarlo):', 185, 62);
+    ctx.fillText(
+      `LLAVES: Kipp[${state.valveKippOpen ? 'ABIERTA' : 'CERRADA'}] · Entrada A[${state.valveAmpAOpen ? 'ABIERTA' : 'CERRADA'}] · Salida B[${state.valveAmpBOpen ? 'ABIERTA' : 'CERRADA'}]`,
+      180,
+      59
+    );
 
-    ctx.font = '9.5px monospace';
-    if (!anyFlaskMissing) {
+    ctx.font = '9.2px monospace';
+    if (!anyFlaskMissing && !anyOrderErr) {
       ctx.fillStyle = '#06d6a0';
-      ctx.fillText('✓ 3 Frascos activos → Entra 100% CO₂ seco (PM = 44.0 g/mol)', 185, 78);
+      ctx.fillText('✓ 3 Frascos activos → Entra 100% CO₂ seco (PM = 44.0 g/mol)', 180, 74);
       ctx.fillStyle = '#cbd5e0';
-      ctx.fillText('Hacé clic en el frasco 1, 2 o 3 para quitarlo y ver el efecto.', 185, 92);
+      ctx.fillText('Clic en cada Llave o Frasco en la mesada para operar.', 180, 89);
     } else {
       const leaks = [];
-      if (state.errors.missingWaterFlask) leaks.push('HCl(g) [PM 36.5]');
-      if (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask) leaks.push('H₂O(v) [PM 18.0]');
+      if (state.errors.missingWaterFlask) leaks.push('HCl(g)[36.5]');
+      if (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask) leaks.push('H₂O(v)[18]');
+      if (state.errors.skipTrainPurge) leaks.push('Aire sin purgar[28.9]');
+      if (state.errors.wrongValveCloseOrder) leaks.push('Retrodifusión aire[28.9]');
+      if (state.errors.regnaultLeak) leaks.push('Pérdida robinete');
       ctx.fillStyle = '#ff5964';
-      ctx.fillText(`⚠️ Entra CO₂ + ${leaks.join(' + ')} a la ampolla`, 185, 78);
+      ctx.fillText(`⚠️ Impurezas: ${leaks.join(' + ')}`, 180, 74);
       ctx.fillStyle = '#ff9f1c';
-      ctx.fillText('Impurezas más livianas que CO₂ (44) → m₁ baja → δ por DEFECTO', 185, 92);
+      ctx.fillText('Gases más livianos que CO₂ (44) → m₁ baja → δ por DEFECTO', 180, 89);
     }
 
     flasks.forEach((f, idx) => {
       // Tubo de conexión desde el elemento previo
       const prevX = idx === 0 ? kx + 42 : flasks[idx - 1].x + 22;
-      ctx.strokeStyle = '#9aa5b1';
+      ctx.strokeStyle = isFlowing ? '#06d6a0' : '#9aa5b1';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(prevX, benchY - 78);
@@ -523,7 +606,7 @@ window.TP2_Densidad = (function () {
         ctx.stroke();
 
         // Burbujeo animado cuando circula CO2
-        if (state.kippPurged || state.ampollaFilledCo2) {
+        if (isFlowing || (state.valveKippOpen && !state.ampollaFilledCo2)) {
           const by = benchY - 12 - ((tick * 2 + idx * 11) % 30);
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
@@ -570,7 +653,7 @@ window.TP2_Densidad = (function () {
 
     // 3. AMPOLLA DE REGNAULT CONECTADA AL FINAL DEL TREN (Derecha: x = 615)
     const ax = 615, ay = benchY - 58;
-    ctx.strokeStyle = anyFlaskMissing ? '#ff9f1c' : '#9aa5b1';
+    ctx.strokeStyle = anyFlaskMissing ? '#ff9f1c' : isFlowing ? '#06d6a0' : '#9aa5b1';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(469, benchY - 78);
@@ -579,18 +662,18 @@ window.TP2_Densidad = (function () {
 
     ctx.beginPath();
     ctx.arc(ax, ay, 36, 0, Math.PI * 2);
-    ctx.fillStyle = state.ampollaFilledCo2
-      ? anyFlaskMissing
+    ctx.fillStyle = state.ampollaFilledCo2 || isFlowing
+      ? anyFlaskMissing || anyOrderErr
         ? 'rgba(255, 159, 28, 0.26)'
         : 'rgba(6, 214, 160, 0.28)'
       : 'rgba(255, 255, 255, 0.08)';
     ctx.fill();
-    ctx.strokeStyle = anyFlaskMissing ? '#ff9f1c' : '#f1faee';
+    ctx.strokeStyle = anyFlaskMissing || anyOrderErr ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
     // Si se eliminaron frascos desecadores, mostrar gotitas de vapor/humedad en la ampolla
-    if ((state.kippPurged || state.ampollaFilledCo2) && (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask)) {
+    if ((isFlowing || state.kippPurged || state.ampollaFilledCo2) && (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask)) {
       ctx.fillStyle = '#38bdf8';
       [[-16, -14], [15, -12], [-18, 12], [16, 14]].forEach(([dx, dy]) => {
         ctx.beginPath();
@@ -599,23 +682,41 @@ window.TP2_Densidad = (function () {
       });
     }
 
-    window.LabCommon.drawStopcock(ctx, ax - 44, ay, state.ampollaFilledCo2, 'Entrada');
-    window.LabCommon.drawStopcock(ctx, ax + 44, ay, state.ampollaFilledCo2, 'Salida');
+    if (state.errors.regnaultLeak) {
+      ctx.fillStyle = '#ff5964';
+      ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('💨 Pierde un poquito', ax, ay - 62);
+    }
+
+    window.LabCommon.drawStopcock(ctx, ax - 44, ay, state.valveAmpAOpen, 'Llave A (Ent)');
+    window.LabCommon.drawStopcock(ctx, ax + 44, ay, state.valveAmpBOpen, 'Llave B (Sal)');
 
     ctx.fillStyle = '#ffd166';
     ctx.font = 'bold 11px monospace';
-    ctx.fillText('AMPOLLA REGNAULT', ax, ay - 48);
-    ctx.fillStyle = state.ampollaFilledCo2 ? (anyFlaskMissing ? '#ff9f1c' : '#06d6a0') : '#cbd5e0';
-    ctx.font = 'bold 9.5px monospace';
+    ctx.fillText('AMPOLLA REGNAULT', ax, ay - 46);
+    ctx.fillStyle = isFlowing
+      ? '#06d6a0'
+      : state.ampollaFilledCo2
+      ? anyFlaskMissing || anyOrderErr
+        ? '#ff9f1c'
+        : '#06d6a0'
+      : '#cbd5e0';
+    ctx.font = 'bold 9px monospace';
     ctx.fillText(
-      state.ampollaFilledCo2
-        ? anyFlaskMissing
-          ? 'CO₂ IMPURO / HÚMEDO'
-          : 'CO₂ PURO Y SECO'
+      isFlowing
+        ? 'CIRCULANDO CO₂...'
+        : state.ampollaFilledCo2
+        ? anyFlaskMissing || anyOrderErr
+          ? 'CO₂ CON IMPUREZAS'
+          : 'CO₂ PURO Y CERRADO'
         : 'EN ESPERA',
       ax,
       ay + 4
     );
+    ctx.fillStyle = '#ffd166';
+    ctx.font = '8.5px monospace';
+    ctx.fillText('[Clic en Llaves para abrir/cerrar]', ax, benchY + 15);
   }
 
   function renderEqualizeAndM1Scene(ctx, w, h, tick) {
@@ -627,12 +728,25 @@ window.TP2_Densidad = (function () {
     ctx.arc(ax, ay, 42, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(6, 214, 160, 0.26)';
     ctx.fill();
-    ctx.strokeStyle = '#f1faee';
+    ctx.strokeStyle = state.errors.regnaultLeak || state.errors.leaveValveOpenTooLong180 ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    window.LabCommon.drawStopcock(ctx, ax - 50, ay, false, 'Cerrada');
-    window.LabCommon.drawStopcock(ctx, ax + 50, ay, state.pressureEqualized180, 'Giro 180°');
+    window.LabCommon.drawStopcock(ctx, ax - 50, ay, false, 'Llave A (Cerrada)');
+    window.LabCommon.drawStopcock(
+      ctx,
+      ax + 50,
+      ay,
+      state.errors.leaveValveOpenTooLong180 || state.pressureEqualized180,
+      state.errors.leaveValveOpenTooLong180 ? '¡Abierta de más!' : 'Llave B (180°)'
+    );
+
+    if (state.errors.regnaultLeak) {
+      ctx.fillStyle = '#ff5964';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('💨 Microfuga en robinete (difunde aire)', ax, ay - 70);
+    }
 
     // Indicador de presión interna dentro de la ampolla
     const pInternal = state.pressureEqualized180 && !state.errors.skipEqualize180
@@ -642,20 +756,22 @@ window.TP2_Densidad = (function () {
     ctx.fillStyle = '#ffd166';
     ctx.font = 'bold 11px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('EQUILIBRADO CON P_atm', ax, ay - 56);
+    ctx.fillText('EQUILIBRADO CON P_atm (GIRO 180°)', ax, ay - 54);
 
-    ctx.fillStyle = state.pressureEqualized180 ? '#06d6a0' : '#ff9f1c';
+    ctx.fillStyle = state.pressureEqualized180 && !state.errors.skipEqualize180 ? '#06d6a0' : '#ff9f1c';
     ctx.fillText(
       `P interna: ${pInternal.toFixed(1)} torr`,
       ax,
       ay + 4
     );
     ctx.fillStyle = '#cbd5e0';
-    ctx.font = '10px monospace';
+    ctx.font = '9.5px monospace';
     ctx.fillText(
-      state.pressureEqualized180
-        ? '★ Exceso de CO₂ liberado (P = P_atm)'
-        : 'Sobrepresión del Kipp acumulada',
+      state.errors.leaveValveOpenTooLong180
+        ? '⚠️ Llave abierta mucho tiempo: escapa CO₂ y entra aire'
+        : state.pressureEqualized180 && !state.errors.skipEqualize180
+        ? '★ Giro rápido 180° realizado: exceso liberado (P = P_atm)'
+        : '⚠️ Sobrepresión del Kipp acumulada (Clic en Llave B para girar 180°)',
       ax,
       ay + 62
     );
@@ -678,12 +794,25 @@ window.TP2_Densidad = (function () {
     const benchY = h - 62;
     const ax = 240, ay = benchY - 75;
 
+    // Trompa de vacío (trompa de agua) conectada arriba y vaso de agua hervida abajo
+    ctx.strokeStyle = '#7bdff2';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ax - 75, ay);
+    ctx.lineTo(ax - 55, ay);
+    ctx.stroke();
+    ctx.fillStyle = '#a0aec0';
+    ctx.font = '8.5px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Trompa Vacío', ax - 88, ay - 6);
+
     // Ampolla llenándose con agua destilada hervida y enfriada
     ctx.beginPath();
     ctx.arc(ax, ay, 42, 0, Math.PI * 2);
     ctx.fillStyle = state.waterFilled ? 'rgba(56, 189, 248, 0.65)' : 'rgba(255, 255, 255, 0.10)';
     ctx.fill();
-    ctx.strokeStyle = state.errors.airBubblesWaterMl > 0 ? '#ff9f1c' : '#f1faee';
+    ctx.strokeStyle =
+      state.errors.airBubblesWaterMl > 0 || state.errors.wetExteriorM2 ? '#ff9f1c' : '#f1faee';
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
@@ -708,8 +837,22 @@ window.TP2_Densidad = (function () {
       ctx.fillText(`⚠️ Burbujas de aire (${state.errors.airBubblesWaterMl.toFixed(1)} mL) → subestima V`, ax, ay - 46);
     }
 
-    window.LabCommon.drawStopcock(ctx, ax - 50, ay, false);
-    window.LabCommon.drawStopcock(ctx, ax + 50, ay, false);
+    // Si no se secó el exterior de la ampolla antes de pesar m2
+    if (state.errors.wetExteriorM2) {
+      ctx.fillStyle = '#38bdf8';
+      [[-45, -12], [45, -8], [-44, 15], [44, 18], [0, 46]].forEach(([dx, dy]) => {
+        ctx.beginPath();
+        ctx.arc(ax + dx, ay + dy, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.fillStyle = '#ff9f1c';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('💧 Exterior sin secar (+4.8 g en m₂ → sobreestima V)', ax, ay - 68);
+    }
+
+    window.LabCommon.drawStopcock(ctx, ax - 50, ay, !state.waterFilled, 'Llave A');
+    window.LabCommon.drawStopcock(ctx, ax + 50, ay, !state.waterFilled, 'Llave B');
 
     ctx.fillStyle = '#7bdff2';
     ctx.font = 'bold 11px monospace';
@@ -824,12 +967,18 @@ window.TP2_Densidad = (function () {
 
     // Diagnóstico de errores experimentales de parcial (Abajo en la pizarra)
     const activeErrs = [];
+    if (state.errors.regnaultLeak) activeErrs.push('Pérdida en robinete Regnault (+m₀ aire → DEFECTO)');
+    if (state.errors.turnOffPumpBeforeCloseValve) activeErrs.push('Apagó bomba antes de cerrar Llave A (+m₀ → DEFECTO)');
+    if (state.errors.skipTrainPurge) activeErrs.push('No purgó aire del tren (-m₁ → DEFECTO)');
+    if (state.errors.wrongValveCloseOrder) activeErrs.push('Cerró Kipp antes que salida atm (-m₁ → DEFECTO)');
     if (state.errors.skipEqualize180) activeErrs.push('No equilibró 180° (+P Kipp → EXCESO)');
+    if (state.errors.leaveValveOpenTooLong180) activeErrs.push('Llave 180° abierta de más (-m₁ → DEFECTO)');
     if (state.errors.residualPressureCmHg > 0) activeErrs.push(`Vacío incompleto (${(state.errors.residualPressureCmHg * 10).toFixed(0)} torr → DEFECTO)`);
     if (state.errors.missingH2SO4Flask || state.errors.missingSilicaFlask) activeErrs.push('Pasó vapor H₂O (PM 18 < 44 → DEFECTO)');
     if (state.errors.missingWaterFlask) activeErrs.push('Sin frasco H₂O (Pasa HCl PM 36.5 → DEFECTO)');
     if (state.errors.so3ImpurityInKipp) activeErrs.push('Impureza SO₃ en Kipp (PM 80 > 44 → EXCESO)');
     if (state.errors.airBubblesWaterMl > 0) activeErrs.push(`Burbujas en agua m₂ (-V → EXCESO)`);
+    if (state.errors.wetExteriorM2) activeErrs.push('Exterior sin secar en m₂ (+V → DEFECTO)');
 
     window.LabCommon.drawPixelBox(
       ctx,

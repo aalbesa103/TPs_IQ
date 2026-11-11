@@ -29,7 +29,8 @@ window.TP1_Gases = (function () {
 
       // Experiencia 1: Boyle-Mariotte
       // Gas encerrado tal que a Patm (758 mmHg), L0 = 18.0 cm -> V0 = 14.14 mL
-      boyleBranchShiftCm: 0.0, // desplazamiento de la rama móvil (-16 a +24 cm)
+      boyleValveOpen: false,    // Robinete superior de la bureta (false = cerrado confinando el gas; true = abierto a Patm)
+      boyleBranchShiftCm: 0.0,  // desplazamiento de la rama móvil (-16 a +24 cm)
       boyleRows: [],
       boyleGraphType: 'P_vs_V', // 'P_vs_V' | 'P_vs_invV' | 'PV_vs_V' | 'PV2_vs_V'
       boylePerturbation: 'none', // 'none' | 'more_mass_or_T' | 'same_mass_co2' | 'same_moles_co2'
@@ -49,6 +50,14 @@ window.TP1_Gases = (function () {
       grahamMeasured: false,
       dNH3_cm: 35.65,
       dHCl_cm: 24.35,
+
+      // Errores experimentales simulables en TP 1
+      errors: {
+        boyleValveLeak: false,        // Robinete de Boyle pierde un poquito al comprimir (Δh > 0 -> escapa gas -> baja P·V)
+        boyleCondensingVapor: false,  // Presencia de vapor que condensa al comprimir (baja n_gas a altas P)
+        glWaterDropletInBulb: false,  // Gotita de agua líquida en bulbo de Gay-Lussac (se evapora al calentar -> sube n y P)
+        grahamLateHClStopper: false   // Tapón de HCl colocado tarde (anillo se desplaza hacia el HCl)
+      },
 
       // Quiz conceptual
       quizStep: 0,
@@ -79,14 +88,25 @@ window.TP1_Gases = (function () {
   function computeBoyleEquilibrium(st) {
     const p0_mmHg = st.patmMmHg;
     const L0_cm = 18.0; // longitud de columna de gas cuando delta_h = 0
-    // Al mover la rama abierta, generamos una diferencia de altura delta_h en cm de Hg
-    const deltaH_cm = st.boyleBranchShiftCm;
+    // Si el robinete superior está abierto a la atmósfera, ambos niveles de Hg se igualan (delta_h = 0)
+    const deltaH_cm = st.boyleValveOpen ? 0.0 : st.boyleBranchShiftCm;
     const deltaH_mmHg = deltaH_cm * 10.0;
     const pGas_mmHg = Math.max(250, p0_mmHg + deltaH_mmHg);
     const pGas_atm = pGas_mmHg / 760.0;
 
-    // Por ley de Boyle: P0 * L0 = Pgas * L
-    const L_cm = (p0_mmHg * L0_cm) / pGas_mmHg;
+    // Factor de pérdida o condensación si hay errores activos
+    let moleFactor = 1.0;
+    if (st.errors && st.errors.boyleValveLeak && deltaH_cm > 0) {
+      // Al comprimir (delta_h > 0), escapa un poquito de gas por el robinete
+      moleFactor -= Math.min(0.22, deltaH_cm * 0.0085);
+    }
+    if (st.errors && st.errors.boyleCondensingVapor && deltaH_cm > 2) {
+      // Vapor condensable licúa parcialmente al aumentar la presión
+      moleFactor -= Math.min(0.18, (deltaH_cm - 2) * 0.0075);
+    }
+
+    // Por ley de Boyle: P0 * L0 * moleFactor = Pgas * L
+    const L_cm = (p0_mmHg * L0_cm * moleFactor) / pGas_mmHg;
     const V_mL = TUBE_AREA_CM2 * L_cm;
 
     // Alturas desde la mesada (nivel de referencia)
@@ -118,8 +138,13 @@ window.TP1_Gases = (function () {
   function computeGayLussacState(st) {
     const T0_K = st.tempAmbC + 273.15;
     const T_K = st.glBathTempC + 273.15;
-    // Presión verdadera del gas si el volumen se mantiene en el aforo: P(T) = P0 * (T / T0)
-    const pTarget_mmHg = st.patmMmHg * (T_K / T0_K);
+    // Si quedó una gotita de agua líquida en el bulbo, al calentar se evapora aportando presión de vapor extra
+    const vaporBonusMm =
+      st.errors && st.errors.glWaterDropletInBulb && st.glBathTempC > st.tempAmbC
+        ? (st.glBathTempC - st.tempAmbC) * 1.45
+        : 0.0;
+    // Presión verdadera del gas si el volumen se mantiene en el aforo: P(T) = P0 * (T / T0) + Pv_extra
+    const pTarget_mmHg = st.patmMmHg * (T_K / T0_K) + vaporBonusMm;
     const deltaHTarget_mm = pTarget_mmHg - st.patmMmHg; // diferencia de altura requerida en mmHg
 
     // Error de enrase según dónde puso el jugador la rama móvil
@@ -353,6 +378,32 @@ window.TP1_Gases = (function () {
     // Rama cerrada de vidrio (contiene el gas confinado arriba y mercurio abajo)
     ctx.fillStyle = 'rgba(123, 223, 242, 0.20)'; // Gas confinado (longitud L)
     ctx.fillRect(xClosed - 7, yTopClosed, 14, yHc - yTopClosed);
+
+    // Robinete esmerilado en el tope de la bureta (Clicable)
+    window.LabCommon.drawStopcock(
+      ctx,
+      xClosed,
+      yTopClosed - 6,
+      state.boyleValveOpen,
+      state.boyleValveOpen ? 'Robinete (Abierto)' : 'Robinete (Cerrado)'
+    );
+
+    if (state.errors && state.errors.boyleValveLeak && eq.deltaH_cm > 0) {
+      ctx.fillStyle = '#ff5964';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('💨 Pierde gas (-n)', xClosed - 18, yTopClosed + 8);
+    }
+    if (state.errors && state.errors.boyleCondensingVapor && eq.deltaH_cm > 2) {
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(xClosed - 3, yTopClosed + 14, 2, 0, Math.PI * 2);
+      ctx.arc(xClosed + 3, yTopClosed + 24, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('💧 Vapor condensa', xClosed - 18, yTopClosed + 20);
+    }
 
     // Mercurio en rama cerrada
     ctx.fillStyle = '#cfd8dc';
@@ -589,8 +640,19 @@ window.TP1_Gases = (function () {
     ctx.beginPath();
     ctx.arc(bathX, benchY - 102, 20, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#ffd166';
+    ctx.strokeStyle = state.errors && state.errors.glWaterDropletInBulb ? '#ff5964' : '#ffd166';
     ctx.stroke();
+
+    if (state.errors && state.errors.glWaterDropletInBulb) {
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.arc(bathX, benchY - 86, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ff5964';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('💧 Gota H₂O en bulbo (+n al calentar)', bathX, benchY - 150);
+    }
 
     // Termómetro en el baño
     ctx.fillStyle = '#fefae0';
@@ -792,7 +854,11 @@ window.TP1_Gases = (function () {
 
     // Fracción teórica del punto de encuentro desde el extremo de NH3:
     // d_NH3 / d_HCl = sqrt(36.461 / 17.031) = 1.4633 -> frac = 1.4633 / 2.4633 = 0.59405
-    const meetFrac = 0.5941;
+    // Si el tapón de HCl se colocó tarde (error de parcial), el anillo se corre hacia el HCl (frac = 0.67)
+    const lateHCl = state.errors && state.errors.grahamLateHClStopper;
+    state.dNH3_cm = lateHCl ? 40.20 : 35.65;
+    state.dHCl_cm = lateHCl ? 19.80 : 24.35;
+    const meetFrac = lateHCl ? 40.20 / 60.0 : 0.5941;
     const meetX = tubeLeft + tubeW * meetFrac;
 
     if (state.grahamProgress > 0) {

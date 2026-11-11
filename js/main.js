@@ -523,6 +523,38 @@ window.LabApp = (function () {
         boyleMsg,
         [
           {
+            label: st.boyleValveOpen
+              ? '🔓 Robinete superior de la bureta: ABIERTO (Igualado a P_atm → Clic para CERRAR y confinar aire)'
+              : '🔒 Robinete superior de la bureta: CERRADO (Aire confinado → Clic para ABRIR a la atmósfera)',
+            onClick: () => {
+              st.boyleValveOpen = !st.boyleValveOpen;
+              window.AudioEngine.playValve();
+              runTP1Stage('boyle');
+            }
+          },
+          {
+            label: st.errors.boyleValveLeak
+              ? '💨 Pérdida en el robinete al comprimir: ACTIVA (Escapa aire cuando Δh > 0 → baja P·V)'
+              : '⚠️ Simular problema: Que el robinete de la bureta pierda un poquito al comprimir (Δh > 0)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.boyleValveLeak = !st.errors.boyleValveLeak;
+              window.AudioEngine.playValve();
+              runTP1Stage('boyle');
+            }
+          },
+          {
+            label: st.errors.boyleCondensingVapor
+              ? '💧 Vapor condensable en la bureta: ACTIVO (Condensa al comprimir → baja n_gas)'
+              : '⚠️ Simular problema de parcial: Presencia de vapor que condensa al aumentar la presión',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.boyleCondensingVapor = !st.errors.boyleCondensingVapor;
+              window.AudioEngine.playValve();
+              runTP1Stage('boyle');
+            }
+          },
+          {
             label: '📝 Anotar medición actual en la tabla de la Bitácora',
             styleClass: 'rpg-btn-accent',
             disabled: !allBoyleCalcsDone,
@@ -736,6 +768,19 @@ window.LabApp = (function () {
             }
           },
           {
+            label: st.errors.glWaterDropletInBulb
+              ? '💧 Gotita de agua en el bulbo: ACTIVA (Se evapora al calentar → aumenta n y P sube de más)'
+              : '⚠️ Simular problema de parcial: Quedó una gotita de agua líquida en el bulbo (se evapora al calentar)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.glWaterDropletInBulb = !st.errors.glWaterDropletInBulb;
+              const target = window.TP1_Gases.computeGayLussacState(st).deltaHTarget_mm;
+              st.glManometerAdjustMm = Number(target.toFixed(1));
+              window.AudioEngine.playBubble();
+              runTP1Stage('gay_lussac');
+            }
+          },
+          {
             label: '📈 3° Completar serie térmica y extrapolar el Cero Absoluto',
             disabled: !glCalcsDone,
             onClick: () => {
@@ -912,6 +957,19 @@ window.LabApp = (function () {
             }
           },
           {
+            label: st.errors.grahamLateHClStopper
+              ? '✓ Error activo: Tapón de HCl colocado tarde (anillo se desplaza hacia el HCl: d_NH₃ = 40,20 cm)'
+              : '⚠️ Simular problema de parcial: Colocar el tapón de HCl unos segundos DESPUÉS que el de NH₃',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.grahamLateHClStopper = !st.errors.grahamLateHClStopper;
+              st.grahamRingFormed = true;
+              st.grahamProgress = 1.0;
+              window.AudioEngine.playGlassClink();
+              runTP1Stage('graham');
+            }
+          },
+          {
             label: '🎓 Pasar a la pregunta conceptual de evaluación del TP 1',
             styleClass: 'rpg-btn-accent',
             disabled: !st.grahamRingFormed || !allGrahamDone,
@@ -980,10 +1038,11 @@ window.LabApp = (function () {
     if (stageName === 'vacio') {
       showDialog(
         'jtp',
-        '«En el TP 2 determinaremos la densidad del CO₂. Seguí con cuidado la técnica de vacío en la Ampolla de Regnault: 1) Abrí la Llave A que conecta con la bomba (manteniendo cerrada la Llave B), 2) Encendé la bomba rotatoria hasta alcanzar alto vacío (< 0,1 mmHg), y 3) Cerrá la Llave A antes de retirar la ampolla para pesar m₀.»',
+        '«En el TP 2 determinaremos la densidad del CO₂. Operá cada llave en la Ampolla de Regnault (podés hacer clic directo sobre la Bomba, la Llave A y la Llave B en el dibujo o usar los botones): 1) Asegurate de que la Llave B esté cerrada y abrí la Llave A hacia la bomba; 2) Encendé la bomba rotatoria (< 0,1 mmHg); 3) Cerrá PRIMERO la Llave A y recién después apagá la bomba antes de pesar m₀.»',
         [
           {
-            label: st.valveAmpAOpen ? '🔓 Llave A: ABIERTA (Clic para cerrar)' : '🔒 1° Abrir Llave A de la ampolla hacia el tren de vacío',
+            label: st.valveAmpAOpen ? '🔓 Llave A (Conexión Vacío): ABIERTA → Clic para CERRAR' : '🔒 Llave A (Conexión Vacío): CERRADA → Clic para ABRIR',
+            styleClass: st.valveAmpAOpen ? '' : 'rpg-btn-accent',
             onClick: () => {
               st.valveAmpAOpen = !st.valveAmpAOpen;
               window.AudioEngine.playValve();
@@ -991,11 +1050,23 @@ window.LabApp = (function () {
             }
           },
           {
-            label: st.vacuumDone ? '✓ Vacío alcanzado (< 0,1 mmHg)' : '🔌 2° Encender bomba rotatoria y evacuar aire (Vacío óptimo < 0,1 mmHg)',
-            disabled: !st.valveAmpAOpen || st.vacuumDone,
+            label: st.valveAmpBOpen ? '⚠️ Llave B (Inferior): ABIERTA (Entra aire → Clic para CERRAR)' : '🔒 Llave B (Inferior): CERRADA (Correcto)',
+            onClick: () => {
+              st.valveAmpBOpen = !st.valveAmpBOpen;
+              window.AudioEngine.playValve();
+              runTP2Stage('vacio');
+            }
+          },
+          {
+            label: st.vacuumDone && st.errors.residualPressureCmHg === 0
+              ? '✓ Bomba rotatoria: Vacío óptimo alcanzado (< 0,1 mmHg)'
+              : '🔌 Encender bomba rotatoria y evacuar aire (< 0,1 mmHg)',
+            styleClass: !st.vacuumDone ? 'rpg-btn-accent' : '',
+            disabled: !st.valveAmpAOpen || st.valveAmpBOpen,
             onClick: () => {
               st.pumpRunning = true;
               st.errors.residualPressureCmHg = 0.0;
+              st.errors.turnOffPumpBeforeCloseValve = false;
               window.AudioEngine.playPump();
               setTimeout(() => {
                 st.pumpRunning = false;
@@ -1007,25 +1078,47 @@ window.LabApp = (function () {
             }
           },
           {
-            label: '⚠️ Simular error de parcial: Hacer vacío insuficiente (dejar P_res = 25 mmHg de aire en m₀)',
+            label: st.errors.regnaultLeak
+              ? '💨 Pérdida en Ampolla de Regnault: ACTIVA (Pierde un poquito por el robinete → +m₀ → δ por DEFECTO)'
+              : '⚠️ Simular problema: Que la Ampolla de Regnault pierda un poquito por el robinete (+m₀ → δ por DEFECTO)',
             styleClass: 'rpg-btn-warn',
-            disabled: !st.valveAmpAOpen || (st.vacuumDone && st.errors.residualPressureCmHg > 0),
             onClick: () => {
-              st.pumpRunning = true;
-              st.errors.residualPressureCmHg = 2.5; // 25 mmHg de aire residual
-              window.AudioEngine.playPump();
-              setTimeout(() => {
-                st.pumpRunning = false;
-                st.vacuumDone = true;
-                window.TP2_Densidad.computeM0();
-                runTP2Stage('vacio');
-              }, 350);
+              st.errors.regnaultLeak = !st.errors.regnaultLeak;
+              window.TP2_Densidad.computeM0();
+              window.AudioEngine.playValve();
+              runTP2Stage('vacio');
             }
           },
           {
-            label: '⚖️ 3° Llevar ampolla (con Llave A cerrada) a la balanza analítica para medir m₀',
+            label: st.errors.turnOffPumpBeforeCloseValve
+              ? '✓ Error activo: Apagó la bomba ANTES de cerrar la Llave A (reingresa aire → +m₀)'
+              : '⚠️ Simular error: Apagar la bomba de vacío ANTES de cerrar la Llave A (reingresa aire → δ por DEFECTO)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.turnOffPumpBeforeCloseValve = !st.errors.turnOffPumpBeforeCloseValve;
+              st.vacuumDone = true;
+              window.TP2_Densidad.computeM0();
+              window.AudioEngine.playValve();
+              runTP2Stage('vacio');
+            }
+          },
+          {
+            label: st.errors.residualPressureCmHg > 0
+              ? '✓ Error activo: Vacío incompleto (P_res = 25 mmHg en m₀ → δ por DEFECTO)'
+              : '⚠️ Simular error: Vacío insuficiente (dejar P_res = 25 mmHg de aire en m₀)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.residualPressureCmHg = st.errors.residualPressureCmHg > 0 ? 0.0 : 2.5;
+              st.vacuumDone = true;
+              window.TP2_Densidad.computeM0();
+              window.AudioEngine.playPump();
+              runTP2Stage('vacio');
+            }
+          },
+          {
+            label: '⚖️ Llevar ampolla (con Llaves A y B cerradas) a la balanza analítica para medir m₀',
             styleClass: 'rpg-btn-accent',
-            disabled: !st.vacuumDone || st.valveAmpAOpen,
+            disabled: !st.vacuumDone || st.valveAmpAOpen || st.valveAmpBOpen,
             onClick: () => runTP2Stage('pesar_m0')
           }
         ],
@@ -1035,9 +1128,12 @@ window.LabApp = (function () {
       st.m0Weighed = true;
       const m0 = window.TP2_Densidad.computeM0();
       window.AudioEngine.playBalanceBeep();
+      const leakNote = st.errors.regnaultLeak
+        ? ' ⚠️ Atención: como la ampolla pierde un poquito por el robinete, entró aire lentamente y m₀ subió a ' + m0.toFixed(4) + ' g (vs. 185,2345 g vacía real).'
+        : '';
       showDialog(
         'ayudante',
-        `«Registramos en la balanza analítica la masa de la ampolla vacía: m₀ = ${m0.toFixed(4)} g. Ahora conectemos la ampolla al tren purificador (H₂O → H₂SO₄ → Sílica Gel) y al Aparato de Kipp para llenarla con CO₂ seco y libre de HCl.»`,
+        `«Registramos en la balanza analítica la masa de la ampolla evacuada: m₀ = ${m0.toFixed(4)} g.${leakNote} Ahora conectemos la ampolla al tren purificador (H₂O → H₂SO₄ → Sílica Gel) y al Aparato de Kipp para llenarla con CO₂.»`,
         [
           {
             label: '🧪 Conectar al Aparato de Kipp y al Tren Purificador de CO₂',
@@ -1064,37 +1160,105 @@ window.LabApp = (function () {
       }
 
       const flaskStatusText = removedList.length === 0
-        ? 'Actualmente los 3 frascos lavadores están CONECTADOS (Podés hacer clic directo sobre cada frasco en la mesada o usar los botones para eliminarlos y ver el impacto en m₁ y δ).'
-        : `⚠️ Frascos eliminados del tren: ${removedList.join(' + ')}. Mirá el bypass en el aparato y cómo cambia la masa m₁ de la ampolla (${window.TP2_Densidad.computeM1().toFixed(4)} g vs. 270,8422 g puros).`;
+        ? 'Los 3 frascos lavadores están CONECTADOS.'
+        : `⚠️ Frascos eliminados: ${removedList.join(' + ')}.`;
+
+      const valvesStatus = `Estado actual de llaves: Kipp [${st.valveKippOpen ? 'ABIERTA' : 'CERRADA'}], Llave A Entrada [${st.valveAmpAOpen ? 'ABIERTA' : 'CERRADA'}], Llave B Salida [${st.valveAmpBOpen ? 'ABIERTA' : 'CERRADA'}].`;
 
       showDialog(
         'jtp',
-        `«Sigamos el protocolo de llenado (pág. 41): 1) Purgá el Aparato de Kipp para desplazar el aire del tren; 2) Abrí las llaves para que circule CO₂ durante 10-15 min; 3) Cerrá en orden estricto: 1° Salida a la atmósfera → 2° Entrada de la ampolla → 3° Kipp. ${flaskStatusText}»`,
+        `«Operá las 3 llaves y los 3 frascos lavadores (haciendo clic sobre cada uno en la mesada o con los botones): 1) Purgá el tren y abrí las 3 llaves (Kipp, Entrada A y Salida B) para que circule CO₂; 2) Cerrá las llaves una por una en el orden estricto: 1° Llave B (Salida a atmósfera) → 2° Llave A (Entrada ampolla) → 3° Llave Kipp. ${valvesStatus} ${flaskStatusText}»`,
         [
           {
-            label: st.kippPurged ? '✓ 1° Tren purgado y CO₂ circulando' : '💨 1° Abrir Kipp, purgar aire del tren y hacer circular CO₂ por la ampolla',
-            styleClass: st.kippPurged ? '' : 'rpg-btn-accent',
-            disabled: st.kippPurged,
+            label: st.valveKippOpen
+              ? '🔓 Llave del Aparato de Kipp: ABIERTA → Clic para CERRAR (3° al terminar)'
+              : '🔒 Llave del Aparato de Kipp: CERRADA → Clic para ABRIR (Generar CO₂)',
+            styleClass: !st.valveKippOpen && !st.ampollaFilledCo2 ? 'rpg-btn-accent' : '',
             onClick: () => {
-              st.kippPurged = true;
-              st.valveKippOpen = true;
-              st.valveAmpAOpen = true;
-              st.valveAmpBOpen = true;
-              window.AudioEngine.playBubble();
+              if (st.valveKippOpen && st.valveAmpBOpen && st.gasFlowingThroughAmpolla) {
+                // ¡Error experimental! Cerró primero la llave del Kipp estando abierta la salida a la atmósfera (Llave B)
+                st.errors.wrongValveCloseOrder = true;
+              }
+              st.valveKippOpen = !st.valveKippOpen;
+              if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+                st.kippPurged = true;
+                st.gasFlowingThroughAmpolla = true;
+                window.AudioEngine.playBubble();
+              } else {
+                window.AudioEngine.playValve();
+              }
               runTP2Stage('kipp_tren');
             }
           },
           {
-            label: '🔒 2° Cerrar en orden correcto: 1° Salida atmósfera → 2° Entrada ampolla → 3° Llave Kipp',
+            label: st.valveAmpAOpen
+              ? '🔓 Llave A (Entrada a la ampolla): ABIERTA → Clic para CERRAR (2° al terminar)'
+              : '🔒 Llave A (Entrada a la ampolla): CERRADA → Clic para ABRIR',
+            onClick: () => {
+              st.valveAmpAOpen = !st.valveAmpAOpen;
+              if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+                st.kippPurged = true;
+                st.gasFlowingThroughAmpolla = true;
+                window.AudioEngine.playBubble();
+              } else {
+                window.AudioEngine.playValve();
+              }
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: st.valveAmpBOpen
+              ? '🔓 Llave B (Salida a la atmósfera): ABIERTA → Clic para CERRAR PRIMERO (1° al terminar)'
+              : '🔒 Llave B (Salida a la atmósfera): CERRADA → Clic para ABRIR',
+            onClick: () => {
+              if (st.valveAmpBOpen && st.valveKippOpen && st.valveAmpAOpen) {
+                // Cerró primero la salida a la atmósfera con el Kipp abierto: ¡orden correcto!
+                st.ampollaFilledCo2 = true;
+                st.errors.wrongValveCloseOrder = false;
+              }
+              st.valveAmpBOpen = !st.valveAmpBOpen;
+              if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+                st.kippPurged = true;
+                st.gasFlowingThroughAmpolla = true;
+                window.AudioEngine.playBubble();
+              } else {
+                window.AudioEngine.playValve();
+              }
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: !st.kippPurged
+              ? '💨 Atajo: 1° Abrir las 3 llaves (Kipp + A + B), purgar tren y hacer circular CO₂'
+              : '✅ Atajo: 2° Cerrar en orden correcto (1° Salida B → 2° Entrada A → 3° Kipp) y avanzar',
             styleClass: 'rpg-btn-accent',
-            disabled: !st.kippPurged,
+            onClick: () => {
+              if (!st.kippPurged) {
+                st.kippPurged = true;
+                st.gasFlowingThroughAmpolla = true;
+                st.valveKippOpen = true;
+                st.valveAmpAOpen = true;
+                st.valveAmpBOpen = true;
+                window.AudioEngine.playBubble();
+                runTP2Stage('kipp_tren');
+              } else {
+                st.ampollaFilledCo2 = true;
+                st.valveAmpBOpen = false;
+                st.valveAmpAOpen = false;
+                st.valveKippOpen = false;
+                st.score += 15;
+                window.AudioEngine.playValve();
+                runTP2Stage('equilibrar_m1');
+              }
+            }
+          },
+          {
+            label: '➡️ Desconectar la ampolla (con Llaves A y B cerradas) y pasar a equilibrar presión (m₁)',
+            styleClass: 'rpg-btn-accent',
+            disabled: (!st.kippPurged && !st.ampollaFilledCo2) || st.valveAmpAOpen || st.valveAmpBOpen,
             onClick: () => {
               st.ampollaFilledCo2 = true;
-              st.valveAmpBOpen = false;
-              st.valveAmpAOpen = false;
               st.valveKippOpen = false;
-              st.score += 15;
-              window.AudioEngine.playValve();
               runTP2Stage('equilibrar_m1');
             }
           },
@@ -1132,15 +1296,23 @@ window.LabApp = (function () {
             }
           },
           {
-            label: (st.errors.missingWaterFlask && st.errors.missingH2SO4Flask && st.errors.missingSilicaFlask)
-              ? '✓ Restaurar los 3 Frascos Lavadores al tren de purificación'
-              : '🚨 Eliminar los 3 Frascos Lavadores a la vez (Kipp directo a la ampolla: entra HCl + H₂O)',
+            label: st.errors.wrongValveCloseOrder
+              ? '✓ Error activo: Cerró primero el Kipp con la salida B abierta (retrodifunde aire → DEFECTO)'
+              : '⚠️ Simular error de llaves: Cerrar primero el Kipp antes que la salida a la atmósfera (entra aire)',
             styleClass: 'rpg-btn-warn',
             onClick: () => {
-              const allRemoved = st.errors.missingWaterFlask && st.errors.missingH2SO4Flask && st.errors.missingSilicaFlask;
-              st.errors.missingWaterFlask = !allRemoved;
-              st.errors.missingH2SO4Flask = !allRemoved;
-              st.errors.missingSilicaFlask = !allRemoved;
+              st.errors.wrongValveCloseOrder = !st.errors.wrongValveCloseOrder;
+              window.AudioEngine.playValve();
+              runTP2Stage('kipp_tren');
+            }
+          },
+          {
+            label: st.errors.skipTrainPurge
+              ? '✓ Error activo: No purgó el aire del tren antes de llenar (queda aire PM 28,9 → DEFECTO)'
+              : '⚠️ Simular error: No purgar el aire de los frascos lavadores antes de conectar la ampolla',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.skipTrainPurge = !st.errors.skipTrainPurge;
               window.AudioEngine.playValve();
               runTP2Stage('kipp_tren');
             }
@@ -1161,13 +1333,14 @@ window.LabApp = (function () {
     } else if (stageName === 'equilibrar_m1') {
       showDialog(
         'jtp',
-        '«Al haber cerrado primero la salida a la atmósfera y luego la conexión al Kipp, el CO₂ dentro de la ampolla quedó a una presión ligeramente superior a la atmosférica. Damos ahora un rápido giro de 180° a una de las llaves de la ampolla para liberar el exceso de CO₂ e igualar la presión interna con P_atm antes de pesar m₁.»',
+        '«Al haber cerrado primero la salida a la atmósfera y luego la conexión al Kipp, el CO₂ dentro de la ampolla quedó a una presión ligeramente superior a la atmosférica. Damos ahora un rápido giro de 180° a la Llave B (podés hacer clic sobre la Llave B en el dibujo) para liberar el exceso de CO₂ e igualar la presión interna con P_atm antes de pesar m₁.»',
         [
           {
-            label: '🔄 Dar giro rápido de 180° a la llave (Equilibrar P = P_atm) y pesar m₁',
+            label: '🔄 Dar giro rápido de 180° a la Llave B (Equilibrar P = P_atm) y pesar m₁',
             styleClass: 'rpg-btn-accent',
             onClick: () => {
               st.errors.skipEqualize180 = false;
+              st.errors.leaveValveOpenTooLong180 = false;
               st.pressureEqualized180 = true;
               st.m1Weighed = true;
               st.score += 15;
@@ -1189,17 +1362,36 @@ window.LabApp = (function () {
             }
           },
           {
-            label: '⚠️ Omitir el giro de 180° y pesar directamente con sobrepresión (Simular error)',
+            label: '⚠️ Omitir el giro de 180° y pesar directamente con sobrepresión del Kipp (+m₁ → EXCESO)',
             styleClass: 'rpg-btn-warn',
             onClick: () => {
               st.errors.skipEqualize180 = true;
+              st.errors.leaveValveOpenTooLong180 = false;
               st.pressureEqualized180 = false;
               st.m1Weighed = true;
               const m1 = window.TP2_Densidad.computeM1();
               window.AudioEngine.playBalanceBeep();
               showDialog(
                 'alerta',
-                `«Omitiste el giro de 180°: la ampolla conserva la sobrepresión de la columna de HCl del Kipp y contiene una masa mayor (m₁ = ${m1.toFixed(4)} g). Verás cómo repercute en tu cálculo de densidad.»`,
+                `«Omitiste el giro de 180°: la ampolla conserva la sobrepresión de la columna de HCl del Kipp y contiene una masa mayor (m₁ = ${m1.toFixed(4)} g). Verás cómo repercute dando un error por EXCESO en la densidad.»`,
+                [{ label: '💧 Continuar al llenado con agua (m₂)', onClick: () => runTP2Stage('agua_m2') }],
+                null
+              );
+            }
+          },
+          {
+            label: '⚠️ Simular error: Abrir la llave y dejarla abierta varios minutos en vez de un giro rápido (-m₁ → DEFECTO)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.skipEqualize180 = false;
+              st.errors.leaveValveOpenTooLong180 = true;
+              st.pressureEqualized180 = true;
+              st.m1Weighed = true;
+              const m1 = window.TP2_Densidad.computeM1();
+              window.AudioEngine.playValve();
+              showDialog(
+                'alerta',
+                `«Dejaste la llave abierta demasiado tiempo: parte del CO₂ escapó por difusión y entró aire atmosférico más liviano (PM 28,9 < 44), bajando m₁ a ${m1.toFixed(4)} g (error por DEFECTO).»`,
                 [{ label: '💧 Continuar al llenado con agua (m₂)', onClick: () => runTP2Stage('agua_m2') }],
                 null
               );
@@ -1211,13 +1403,14 @@ window.LabApp = (function () {
     } else if (stageName === 'agua_m2') {
       showDialog(
         'jtp',
-        `«Llenamos completamente la ampolla con agua destilada (previamente hervida para expulsar gases disueltos y enfriada a ${st.tempAguaC.toFixed(1)} °C) cuidando que no queden burbujas adheridas, y la pesamos en balanza granataria para obtener m₂.»`,
+        `«Para determinar el volumen V de la ampolla: 1) Conectamos una llave a la trompa de vacío (trompa de agua) y sumergimos el otro extremo en agua destilada hervida y enfriada a ${st.tempAguaC.toFixed(1)} °C; 2) Abrimos las llaves para succionar hasta llenarla sin burbujas; 3) Secamos bien por fuera y pesamos m₂ en balanza granataria.»`,
         [
           {
-            label: '💧 Llenar ampolla con agua destilada desgasificada sin burbujas y pesar m₂ (Óptimo)',
+            label: '💧 Succionar con trompa de vacío, llenar con agua hervida sin burbujas, secar y pesar m₂ (Óptimo)',
             styleClass: 'rpg-btn-accent',
             onClick: () => {
               st.errors.airBubblesWaterMl = 0.0;
+              st.errors.wetExteriorM2 = false;
               st.waterFilled = true;
               st.m2Weighed = true;
               st.score += 10;
@@ -1228,10 +1421,11 @@ window.LabApp = (function () {
             }
           },
           {
-            label: '⚠️ Simular error de parcial: Dejar burbujas de aire al llenar con agua (subestima V → δ por EXCESO)',
+            label: '⚠️ Simular error: Quedan burbujas de aire adheridas o se usa agua sin hervir (-m₂ → -V → δ por EXCESO)',
             styleClass: 'rpg-btn-warn',
             onClick: () => {
               st.errors.airBubblesWaterMl = 12.5;
+              st.errors.wetExteriorM2 = false;
               st.waterFilled = true;
               st.m2Weighed = true;
               window.TP2_Densidad.computeM2();
@@ -1254,6 +1448,31 @@ window.LabApp = (function () {
                       window.TP2_Densidad.performFinalCalculations();
                       runTP2Stage('calculos');
                     }
+                  }
+                ],
+                null
+              );
+            }
+          },
+          {
+            label: '⚠️ Simular error: Olvidar secar las gotas de agua en la pared exterior al pesar m₂ (+m₂ → +V → δ por DEFECTO)',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              st.errors.airBubblesWaterMl = 0.0;
+              st.errors.wetExteriorM2 = true;
+              st.waterFilled = true;
+              st.m2Weighed = true;
+              window.TP2_Densidad.computeM2();
+              window.TP2_Densidad.performFinalCalculations();
+              window.AudioEngine.playBalanceBeep();
+              showDialog(
+                'alerta',
+                `«💧 Mirá el exterior de la ampolla: quedaron gotas de agua sin secar (+4,8 g), por lo que m₂ subió a ${st.measured.m2_g.toFixed(2)} g. Eso sobreestima el volumen V calculado de la ampolla y produce un error por DEFECTO en la densidad del CO₂.»`,
+                [
+                  {
+                    label: '📊 Pasar al pizarrón de cálculos para comprobar el error por defecto',
+                    styleClass: 'rpg-btn-accent',
+                    onClick: () => runTP2Stage('calculos')
                   }
                 ],
                 null
@@ -1361,17 +1580,25 @@ window.LabApp = (function () {
             onClick: () => runTP2Stage('quiz')
           },
           {
-            label: '⚠️ Probar en vivo los 6 Errores Experimentales de Parcial sobre el Pizarrón',
+            label: '⚠️ Probar en vivo los 11 Problemas y Errores Experimentales de Parcial sobre el Pizarrón',
             styleClass: 'rpg-btn-warn',
             onClick: () => {
               Object.keys(st.calcSolved).forEach(k => (st.calcSolved[k] = true));
               window.TP2_Densidad.performFinalCalculations();
               showDialog(
                 'ayudante',
-                '«Activá o desactivá cualquiera de los errores clásicos de Segundo Parcial y mirá arriba en el pizarrón cómo varían m₀, m₁, m₂, el Volumen V y la Densidad δ(CNTP), indicando si produce error por EXCESO (+) o por DEFECTO (-):»',
+                '«Activá o desactivá cualquiera de los problemas de Segundo Parcial y mirá arriba en el pizarrón cómo varían m₀, m₁, m₂, el Volumen V y la Densidad δ(CNTP), indicando si produce error por EXCESO (+) o por DEFECTO (-):»',
                 [
                   {
-                    label: `${st.errors.skipEqualize180 ? '✅' : '⬜'} 1) No equilibrar llave 180° tras desconectar del Kipp (+P_Kipp → EXCESO)`,
+                    label: `${st.errors.regnaultLeak ? '✅' : '⬜'} 1) La ampolla de Regnault pierde un poquito por el robinete (+m₀ aire → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.regnaultLeak = !st.errors.regnaultLeak;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.skipEqualize180 ? '✅' : '⬜'} 2) No equilibrar llave 180° tras desconectar del Kipp (+P_Kipp → EXCESO)`,
                     onClick: () => {
                       st.errors.skipEqualize180 = !st.errors.skipEqualize180;
                       window.TP2_Densidad.performFinalCalculations();
@@ -1379,7 +1606,31 @@ window.LabApp = (function () {
                     }
                   },
                   {
-                    label: `${st.errors.residualPressureCmHg > 0 ? '✅' : '⬜'} 2) Vacío insuficiente antes de pesar m₀ (queda aire residual → DEFECTO)`,
+                    label: `${st.errors.leaveValveOpenTooLong180 ? '✅' : '⬜'} 3) Dejar la llave abierta varios minutos al equilibrar 180° (-m₁ → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.leaveValveOpenTooLong180 = !st.errors.leaveValveOpenTooLong180;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.wrongValveCloseOrder ? '✅' : '⬜'} 4) Cerrar primero el Kipp antes que la salida a la atmósfera (-m₁ → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.wrongValveCloseOrder = !st.errors.wrongValveCloseOrder;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.skipTrainPurge ? '✅' : '⬜'} 5) No purgar el aire del tren antes de llenar la ampolla (-m₁ → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.skipTrainPurge = !st.errors.skipTrainPurge;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.residualPressureCmHg > 0 ? '✅' : '⬜'} 6) Vacío insuficiente antes de pesar m₀ (queda aire residual → DEFECTO)`,
                     onClick: () => {
                       st.errors.residualPressureCmHg = st.errors.residualPressureCmHg > 0 ? 0.0 : 2.5;
                       window.TP2_Densidad.performFinalCalculations();
@@ -1387,15 +1638,15 @@ window.LabApp = (function () {
                     }
                   },
                   {
-                    label: `${st.errors.airBubblesWaterMl > 0 ? '✅' : '⬜'} 3) Quedan burbujas de aire al llenar con agua en m₂ (-V ampolla → EXCESO)`,
+                    label: `${st.errors.missingWaterFlask ? '✅' : '⬜'} 7) Eliminar Frasco 1 de agua (pasa HCl gaseoso PM 36,5 < 44 → DEFECTO)`,
                     onClick: () => {
-                      st.errors.airBubblesWaterMl = st.errors.airBubblesWaterMl > 0 ? 0.0 : 12.5;
+                      st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
                       window.TP2_Densidad.performFinalCalculations();
                       runTP2Stage('calculos');
                     }
                   },
                   {
-                    label: `${st.errors.missingH2SO4Flask ? '✅' : '⬜'} 4) Entra vapor de agua por el tren lavador (PM 18 < 44 → DEFECTO)`,
+                    label: `${st.errors.missingH2SO4Flask ? '✅' : '⬜'} 8) Eliminar Frascos 2 y 3 desecadores (entra vapor de H₂O PM 18 < 44 → DEFECTO)`,
                     onClick: () => {
                       st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
                       st.errors.missingSilicaFlask = st.errors.missingH2SO4Flask;
@@ -1404,17 +1655,25 @@ window.LabApp = (function () {
                     }
                   },
                   {
-                    label: `${st.errors.missingWaterFlask ? '✅' : '⬜'} 5) Omitir primer frasco lavador con agua (pasa HCl PM 36,5 < 44 → DEFECTO)`,
+                    label: `${st.errors.so3ImpurityInKipp ? '✅' : '⬜'} 9) En el Kipp se genera SO₃ no retenido (PM 80 > 44 → EXCESO)`,
                     onClick: () => {
-                      st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
+                      st.errors.so3ImpurityInKipp = !st.errors.so3ImpurityInKipp;
                       window.TP2_Densidad.performFinalCalculations();
                       runTP2Stage('calculos');
                     }
                   },
                   {
-                    label: `${st.errors.so3ImpurityInKipp ? '✅' : '⬜'} 6) En el Kipp se genera SO₃ no retenido (PM 80 > 44 → EXCESO)`,
+                    label: `${st.errors.airBubblesWaterMl > 0 ? '✅' : '⬜'} 10) Quedan burbujas de aire al llenar con agua en m₂ (-V ampolla → EXCESO)`,
                     onClick: () => {
-                      st.errors.so3ImpurityInKipp = !st.errors.so3ImpurityInKipp;
+                      st.errors.airBubblesWaterMl = st.errors.airBubblesWaterMl > 0 ? 0.0 : 12.5;
+                      window.TP2_Densidad.performFinalCalculations();
+                      runTP2Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.wetExteriorM2 ? '✅' : '⬜'} 11) Ampolla mojada por fuera sin secar al pesar m₂ (+V ampolla → DEFECTO)`,
+                    onClick: () => {
+                      st.errors.wetExteriorM2 = !st.errors.wetExteriorM2;
                       window.TP2_Densidad.performFinalCalculations();
                       runTP2Stage('calculos');
                     }
@@ -1423,9 +1682,15 @@ window.LabApp = (function () {
                     label: '✨ Restaurar experiencia ideal sin errores y volver a los cálculos',
                     styleClass: 'rpg-btn-accent',
                     onClick: () => {
+                      st.errors.regnaultLeak = false;
+                      st.errors.turnOffPumpBeforeCloseValve = false;
+                      st.errors.skipTrainPurge = false;
+                      st.errors.wrongValveCloseOrder = false;
                       st.errors.skipEqualize180 = false;
+                      st.errors.leaveValveOpenTooLong180 = false;
                       st.errors.residualPressureCmHg = 0.0;
                       st.errors.airBubblesWaterMl = 0.0;
+                      st.errors.wetExteriorM2 = false;
                       st.errors.missingH2SO4Flask = false;
                       st.errors.missingSilicaFlask = false;
                       st.errors.missingWaterFlask = false;
@@ -1942,6 +2207,32 @@ window.LabApp = (function () {
                     }
                   },
                   {
+                    label: `${st.errors.useBathTempError ? '✅' : '⬜'} 8) Usar T del baño (373 K) en vez de T de la campana (295 K) en PV=nRT (+T → PM por EXCESO)`,
+                    onClick: () => {
+                      st.errors.useBathTempError = !st.errors.useBathTempError;
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.airBubbleInBellStart ? '✅' : '⬜'} 9) Quedó una burbuja de aire inicial (+5,5 mL) en la campana antes de largar la ampolla (+V → PM por DEFECTO)`,
+                    onClick: () => {
+                      st.errors.airBubbleInBellStart = !st.errors.airBubbleInBellStart;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.liquidBoilsAboveBath ? '✅' : '⬜'} 10) La sustancia tiene T_eb mayor que la T del baño (-V → PM muy por EXCESO)`,
+                    onClick: () => {
+                      st.errors.liquidBoilsAboveBath = !st.errors.liquidBoilsAboveBath;
+                      window.TP3_VictorMeyer.computeCollectedVolume();
+                      window.TP3_VictorMeyer.performCalculations();
+                      runTP3Stage('calculos');
+                    }
+                  },
+                  {
                     label: '✨ Restaurar corrida ideal sin errores y volver a los cálculos',
                     styleClass: 'rpg-btn-accent',
                     onClick: () => {
@@ -1952,6 +2243,9 @@ window.LabApp = (function () {
                       st.errors.slowStopperLoss = false;
                       st.errors.ignorePvWater = false;
                       st.errors.ignoreWaterColumn = false;
+                      st.errors.useBathTempError = false;
+                      st.errors.airBubbleInBellStart = false;
+                      st.errors.liquidBoilsAboveBath = false;
                       st.sampleMassG = sub.defaultMassG;
                       window.TP3_VictorMeyer.computeCollectedVolume();
                       window.TP3_VictorMeyer.performCalculations();
@@ -2259,6 +2553,99 @@ window.LabApp = (function () {
             onClick: () => runTP4Stage('quiz')
           },
           {
+            label: '⚠️ Probar en vivo los 7 Problemas y Errores Experimentales de Parcial en Calorimetría',
+            styleClass: 'rpg-btn-warn',
+            onClick: () => {
+              Object.keys(st.calcSolved).forEach(k => (st.calcSolved[k] = true));
+              window.TP4_Calorimetria.generateNeutralizationCurve();
+              window.TP4_Calorimetria.performFinalCalculations();
+              showDialog(
+                'ayudante',
+                '«Activá o desactivá cualquiera de los problemas experimentales de Segundo Parcial de Calorimetría y mirá en vivo en el pizarrón cómo cambian Q_total, Q_dilución y ΔH_neutralización (kcal/eq):»',
+                [
+                  {
+                    label: `${st.acidType === 'CH3COOH' ? '✅' : '⬜'} 1) Reemplazar HCl (Ácido Fuerte) por CH₃COOH (Ácido Débil → |ΔH| menor por ionización endotérmica)`,
+                    onClick: () => {
+                      st.acidType = st.acidType === 'HCl' ? 'CH3COOH' : 'HCl';
+                      window.TP4_Calorimetria.generateNeutralizationCurve();
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.ignoreWaterEquiv ? '✅' : '⬜'} 2) Despreciar el Equivalente en Agua del calorímetro (tomar E = 0 → |ΔH| por DEFECTO)`,
+                    onClick: () => {
+                      st.errors.ignoreWaterEquiv = !st.errors.ignoreWaterEquiv;
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.ignoreDilution ? '✅' : '⬜'} 3) Omitir la resta del Calor de Dilución del ácido (Q_dil = 0 → |ΔH| por EXCESO)`,
+                    onClick: () => {
+                      st.errors.ignoreDilution = !st.errors.ignoreDilution;
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.incompleteAcidBlow ? '✅' : '⬜'} 4) Queda parte del ácido sin salir de la ampolla al insuflar (-n_real → |ΔH| por DEFECTO)`,
+                    onClick: () => {
+                      st.errors.incompleteAcidBlow = !st.errors.incompleteAcidBlow;
+                      window.TP4_Calorimetria.generateNeutralizationCurve();
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.acidHotterThanBase ? '✅' : '⬜'} 5) El ácido en la ampolla estaba a mayor T que la base antes de insuflar (+ΔT → |ΔH| por EXCESO)`,
+                    onClick: () => {
+                      st.errors.acidHotterThanBase = !st.errors.acidHotterThanBase;
+                      window.TP4_Calorimetria.generateNeutralizationCurve();
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.nonAdiabaticLoss ? '✅' : '⬜'} 6) Termo mal tapado con pérdida de calor al ambiente (-ΔT → |ΔH| por DEFECTO)`,
+                    onClick: () => {
+                      st.errors.nonAdiabaticLoss = !st.errors.nonAdiabaticLoss;
+                      window.TP4_Calorimetria.generateNeutralizationCurve();
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: `${st.errors.doubleVolumesSameConc ? '✅' : '⬜'} 7) Duplicar volúmenes a igual concentración (Q se duplica, pero ΔH kcal/eq es INTENSIVA y casi no cambia)`,
+                    onClick: () => {
+                      st.errors.doubleVolumesSameConc = !st.errors.doubleVolumesSameConc;
+                      window.TP4_Calorimetria.generateNeutralizationCurve();
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  },
+                  {
+                    label: '✨ Restaurar experiencia ideal (HCl fuerte sin errores) y volver a los cálculos',
+                    styleClass: 'rpg-btn-accent',
+                    onClick: () => {
+                      st.acidType = 'HCl';
+                      st.errors.nonAdiabaticLoss = false;
+                      st.errors.ignoreDilution = false;
+                      st.errors.ignoreWaterEquiv = false;
+                      st.errors.incompleteAcidBlow = false;
+                      st.errors.acidHotterThanBase = false;
+                      st.errors.doubleVolumesSameConc = false;
+                      window.TP4_Calorimetria.generateNeutralizationCurve();
+                      window.TP4_Calorimetria.performFinalCalculations();
+                      runTP4Stage('calculos');
+                    }
+                  }
+                ],
+                wbCal
+              );
+            }
+          },
+          {
             label: '📖 Abrir Bitácora y Exportar Informe (.TXT / .CSV)',
             onClick: () => toggleLogbook(true)
           },
@@ -2411,58 +2798,104 @@ window.LabApp = (function () {
       }
     } else if (app.activeTp === 'tp2') {
       const st = window.TP2_Densidad.getState();
-      if (st.stage === 'kipp_tren' || st.stage === 'equilibrar_m1' || st.stage === 'agua_m2' || st.stage === 'calculos') {
+      if (
+        st.stage === 'vacio' ||
+        st.stage === 'pesar_m0' ||
+        st.stage === 'kipp_tren' ||
+        st.stage === 'equilibrar_m1' ||
+        st.stage === 'agua_m2' ||
+        st.stage === 'calculos'
+      ) {
         dom.instrumentBar.classList.remove('hidden');
+        const m0 = window.TP2_Densidad.computeM0();
         const m1 = window.TP2_Densidad.computeM1();
         const calc = window.TP2_Densidad.performFinalCalculations();
         const f1Rem = st.errors.missingWaterFlask;
         const f2Rem = st.errors.missingH2SO4Flask;
         const f3Rem = st.errors.missingSilicaFlask;
-        const allRem = f1Rem && f2Rem && f3Rem;
+        const leakOn = st.errors.regnaultLeak;
 
         dom.instrumentBar.innerHTML = `
           <div class="inst-control-group">
-            <span>🧪 Frascos Lavadores (clic para quitar/poner):</span>
-            <button type="button" class="teacher-mini-btn ${f1Rem ? 'active-err' : ''}" id="btn-tp2-f1" style="${f1Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
-              ${f1Rem ? '❌ 1. H₂O (Eliminado)' : '✓ 1. H₂O(l)'}
+            <span>🔧 Llaves:</span>
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-vkipp" style="${st.valveKippOpen ? 'border-color:#06d6a0;color:#06d6a0;' : 'border-color:#9aa5b1;color:#cbd5e0;'}">
+              Kipp: ${st.valveKippOpen ? 'ABIERTA' : 'CERRADA'}
             </button>
-            <button type="button" class="teacher-mini-btn ${f2Rem ? 'active-err' : ''}" id="btn-tp2-f2" style="${f2Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
-              ${f2Rem ? '❌ 2. H₂SO₄ (Eliminado)' : '✓ 2. H₂SO₄(c)'}
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-va" style="${st.valveAmpAOpen ? 'border-color:#06d6a0;color:#06d6a0;' : 'border-color:#9aa5b1;color:#cbd5e0;'}">
+              Llave A: ${st.valveAmpAOpen ? 'ABIERTA' : 'CERRADA'}
             </button>
-            <button type="button" class="teacher-mini-btn ${f3Rem ? 'active-err' : ''}" id="btn-tp2-f3" style="${f3Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
-              ${f3Rem ? '❌ 3. Sílica (Eliminado)' : '✓ 3. Sílica Gel'}
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-vb" style="${st.valveAmpBOpen ? 'border-color:#06d6a0;color:#06d6a0;' : 'border-color:#9aa5b1;color:#cbd5e0;'}">
+              Llave B: ${st.valveAmpBOpen ? 'ABIERTA' : 'CERRADA'}
             </button>
-            <button type="button" class="teacher-mini-btn" id="btn-tp2-fall" style="border-color:#ffd166;color:#ffd166;">
-              ${allRem ? '🔄 Restaurar los 3' : '🗑️ Quitar los 3'}
+            <span style="margin-left:6px;">🧪 Frascos:</span>
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-f1" style="${f1Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
+              ${f1Rem ? '❌ 1.H₂O' : '✓ 1.H₂O'}
             </button>
-            <span class="inst-badge">m₁=${m1.toFixed(4)} g | δ_CNPT=${calc.deltaCntpExpGL.toFixed(3)} g/L</span>
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-f2" style="${f2Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
+              ${f2Rem ? '❌ 2.H₂SO₄' : '✓ 2.H₂SO₄'}
+            </button>
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-f3" style="${f3Rem ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#06d6a0;color:#06d6a0;'}">
+              ${f3Rem ? '❌ 3.Sílica' : '✓ 3.Sílica'}
+            </button>
+            <button type="button" class="teacher-mini-btn" id="btn-tp2-leak" style="${leakOn ? 'border-color:#ff5964;color:#ff5964;' : 'border-color:#ffd166;color:#ffd166;'}">
+              ${leakOn ? '💨 Ampolla pierde: SÍ' : '💨 ¿Ampolla pierde?'}
+            </button>
+            <span class="inst-badge">m₀=${m0.toFixed(4)}g | m₁=${m1.toFixed(4)}g | δ=${calc.deltaCntpExpGL.toFixed(3)} g/L</span>
           </div>
         `;
 
-        const refreshTp2AfterFlaskToggle = () => {
+        const refreshTp2AfterToggle = () => {
           window.AudioEngine.playValve();
           runTP2Stage(st.stage);
           updateHud();
         };
 
+        document.getElementById('btn-tp2-vkipp').addEventListener('click', () => {
+          if (st.valveKippOpen && st.valveAmpBOpen && st.gasFlowingThroughAmpolla) {
+            st.errors.wrongValveCloseOrder = true;
+          }
+          st.valveKippOpen = !st.valveKippOpen;
+          if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+            st.kippPurged = true;
+            st.gasFlowingThroughAmpolla = true;
+          }
+          refreshTp2AfterToggle();
+        });
+        document.getElementById('btn-tp2-va').addEventListener('click', () => {
+          st.valveAmpAOpen = !st.valveAmpAOpen;
+          if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+            st.kippPurged = true;
+            st.gasFlowingThroughAmpolla = true;
+          }
+          refreshTp2AfterToggle();
+        });
+        document.getElementById('btn-tp2-vb').addEventListener('click', () => {
+          if (st.valveAmpBOpen && st.valveKippOpen && st.valveAmpAOpen) {
+            st.ampollaFilledCo2 = true;
+            st.errors.wrongValveCloseOrder = false;
+          }
+          st.valveAmpBOpen = !st.valveAmpBOpen;
+          if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+            st.kippPurged = true;
+            st.gasFlowingThroughAmpolla = true;
+          }
+          refreshTp2AfterToggle();
+        });
         document.getElementById('btn-tp2-f1').addEventListener('click', () => {
           st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
-          refreshTp2AfterFlaskToggle();
+          refreshTp2AfterToggle();
         });
         document.getElementById('btn-tp2-f2').addEventListener('click', () => {
           st.errors.missingH2SO4Flask = !st.errors.missingH2SO4Flask;
-          refreshTp2AfterFlaskToggle();
+          refreshTp2AfterToggle();
         });
         document.getElementById('btn-tp2-f3').addEventListener('click', () => {
           st.errors.missingSilicaFlask = !st.errors.missingSilicaFlask;
-          refreshTp2AfterFlaskToggle();
+          refreshTp2AfterToggle();
         });
-        document.getElementById('btn-tp2-fall').addEventListener('click', () => {
-          const nextState = !allRem;
-          st.errors.missingWaterFlask = nextState;
-          st.errors.missingH2SO4Flask = nextState;
-          st.errors.missingSilicaFlask = nextState;
-          refreshTp2AfterFlaskToggle();
+        document.getElementById('btn-tp2-leak').addEventListener('click', () => {
+          st.errors.regnaultLeak = !st.errors.regnaultLeak;
+          refreshTp2AfterToggle();
         });
         return;
       }
@@ -3211,17 +3644,59 @@ window.LabApp = (function () {
           st.fortinScrewOffsetMm = 0.0;
           window.AudioEngine.playDialTick(true);
           runTP1Stage('fortin');
+        } else if (st.stage === 'boyle' && cx >= 215 && cx <= 265 && cy >= 45 && cy <= 95) {
+          // Clic en el Robinete superior de la bureta de Boyle
+          st.boyleValveOpen = !st.boyleValveOpen;
+          window.AudioEngine.playValve();
+          runTP1Stage('boyle');
         }
       } else if (app.activeTp === 'tp2') {
         const st = window.TP2_Densidad.getState();
-        // Clic en la Llave A de la ampolla de Regnault durante etapa de vacío
-        if (st.stage === 'vacio' && cx >= 325 && cx <= 375 && cy >= 150 && cy <= 205) {
-          st.valveAmpAOpen = !st.valveAmpAOpen;
-          window.AudioEngine.playValve();
-          runTP2Stage('vacio');
+        if (st.stage === 'vacio') {
+          if (cx >= 48 && cx <= 173 && cy >= 155 && cy <= 245) {
+            // Clic en la Bomba de Vacío
+            if (st.valveAmpAOpen && !st.valveAmpBOpen) {
+              st.pumpRunning = !st.pumpRunning;
+              if (st.pumpRunning) {
+                st.errors.residualPressureCmHg = 0.0;
+                window.AudioEngine.playPump();
+                setTimeout(() => {
+                  st.pumpRunning = false;
+                  st.vacuumDone = true;
+                  window.TP2_Densidad.computeM0();
+                  runTP2Stage('vacio');
+                }, 380);
+              }
+              runTP2Stage('vacio');
+            }
+          } else if (cx >= 325 && cx <= 372 && cy >= 150 && cy <= 205) {
+            // Clic en Llave A de la ampolla de Regnault
+            st.valveAmpAOpen = !st.valveAmpAOpen;
+            window.AudioEngine.playValve();
+            runTP2Stage('vacio');
+          } else if (cx >= 412 && cx <= 458 && cy >= 150 && cy <= 205) {
+            // Clic en Llave B de la ampolla de Regnault
+            st.valveAmpBOpen = !st.valveAmpBOpen;
+            window.AudioEngine.playValve();
+            runTP2Stage('vacio');
+          }
         } else if (st.stage === 'kipp_tren' && cy >= 135 && cy <= 255) {
-          // Clic directo sobre cada uno de los 3 frascos lavadores para eliminarlos o volver a colocarlos
-          if (cx >= 195 && cx <= 255) {
+          if (cx >= 110 && cx <= 155 && cy >= 135 && cy <= 190) {
+            // Clic en Llave del Aparato de Kipp
+            if (st.valveKippOpen && st.valveAmpBOpen && st.gasFlowingThroughAmpolla) {
+              st.errors.wrongValveCloseOrder = true;
+            }
+            st.valveKippOpen = !st.valveKippOpen;
+            if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+              st.kippPurged = true;
+              st.gasFlowingThroughAmpolla = true;
+              window.AudioEngine.playBubble();
+            } else {
+              window.AudioEngine.playValve();
+            }
+            runTP2Stage('kipp_tren');
+            updateHud();
+          } else if (cx >= 195 && cx <= 255) {
             st.errors.missingWaterFlask = !st.errors.missingWaterFlask;
             window.AudioEngine.playValve();
             runTP2Stage('kipp_tren');
@@ -3236,7 +3711,45 @@ window.LabApp = (function () {
             window.AudioEngine.playValve();
             runTP2Stage('kipp_tren');
             updateHud();
+          } else if (cx >= 550 && cx <= 592 && cy >= 155 && cy <= 205) {
+            // Clic en Llave A (Entrada de la ampolla)
+            st.valveAmpAOpen = !st.valveAmpAOpen;
+            if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+              st.kippPurged = true;
+              st.gasFlowingThroughAmpolla = true;
+              window.AudioEngine.playBubble();
+            } else {
+              window.AudioEngine.playValve();
+            }
+            runTP2Stage('kipp_tren');
+            updateHud();
+          } else if (cx >= 638 && cx <= 682 && cy >= 155 && cy <= 205) {
+            // Clic en Llave B (Salida a la atmósfera)
+            if (st.valveAmpBOpen && st.valveKippOpen && st.valveAmpAOpen) {
+              st.ampollaFilledCo2 = true;
+              st.errors.wrongValveCloseOrder = false;
+            }
+            st.valveAmpBOpen = !st.valveAmpBOpen;
+            if (st.valveKippOpen && st.valveAmpAOpen && st.valveAmpBOpen) {
+              st.kippPurged = true;
+              st.gasFlowingThroughAmpolla = true;
+              window.AudioEngine.playBubble();
+            } else {
+              window.AudioEngine.playValve();
+            }
+            runTP2Stage('kipp_tren');
+            updateHud();
           }
+        } else if (st.stage === 'equilibrar_m1' && cx >= 265 && cx <= 315 && cy >= 140 && cy <= 195) {
+          // Clic en Llave B para el giro rápido de 180°
+          st.errors.skipEqualize180 = false;
+          st.errors.leaveValveOpenTooLong180 = false;
+          st.pressureEqualized180 = true;
+          st.m1Weighed = true;
+          window.TP2_Densidad.computeM1();
+          window.AudioEngine.playValve();
+          runTP2Stage('equilibrar_m1');
+          updateHud();
         }
       } else if (app.activeTp === 'tp4') {
         const st = window.TP4_Calorimetria.getState();
